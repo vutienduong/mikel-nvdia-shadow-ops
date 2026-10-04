@@ -1,3 +1,4 @@
+import { containsRefundAmount } from "./lifecycle";
 import {
   INITIAL_TICKETS,
   INITIAL_CUSTOMERS,
@@ -32,6 +33,7 @@ export interface OperationsState {
   policies: Policy[];
   approvals: ApprovalRequest[];
   workflows: WorkflowDefinition[];
+  workflowVersions: WorkflowDefinition[];
   runs: WorkflowRun[];
   messages: CustomerMessage[];
 }
@@ -43,6 +45,7 @@ export function createDemoState(): OperationsState {
     policies: INITIAL_POLICIES,
     approvals: [],
     workflows: [],
+    workflowVersions: [],
     runs: [],
     messages: [],
   });
@@ -97,6 +100,7 @@ export class OperationsEngine {
   private active = new Set<string>();
   constructor(state: OperationsState, options: Options) {
     this.state = structuredClone(state);
+    this.state.workflowVersions ||= [];
     this.options = options;
     // Interrupted steps cannot safely be replayed after a refresh. Approval checkpoints are resumable.
     for (const run of this.state.runs)
@@ -309,7 +313,7 @@ export class OperationsEngine {
       !payment.refundId ||
       payment.status !== "refunded" ||
       !text.includes(payment.refundId) ||
-      !text.includes(String(payment.amount))
+      !containsRefundAmount(text, payment.amount)
     )
       throw new Error(
         "Reply must contain the actual refund receipt and amount",
@@ -429,6 +433,72 @@ export class OperationsEngine {
     this.emit();
     await this.advance(run);
     return structuredClone(run);
+  }
+  async retryRun(runId: string): Promise<WorkflowRun> {
+    const run = this.state.runs.find((r) => r.id === runId);
+    if (!run || run.status !== "failed" || run.reviewRequired)
+      throw new Error(
+        "Run is not eligible for automatic retry; request human review",
+      );
+    this.assertUnlocked(run.ticketId);
+    const step = run.steps[run.nextStep!];
+    if (
+      !step ||
+      step.status !== "failed" ||
+      !["draft_customer_reply", "send_customer_reply", "close_ticket"].includes(
+        step.skillId,
+      )
+    )
+      throw new Error(
+        "Only failed communication checkpoints can retry; refund is never replayed",
+      );
+    if (
+      run.steps
+        .slice(0, run.nextStep)
+        .some((s) => !["completed", "skipped"].includes(s.status))
+    )
+      throw new Error("Incomplete checkpoint; human review required");
+    const receipt = run.context?.refund;
+    const payment = this.state.payments.find(
+      (p) => p.id === receipt?.paymentId,
+    );
+    if (
+      !payment ||
+      payment.status !== "refunded" ||
+      payment.refundTicketId !== run.ticketId ||
+      payment.refundId !== receipt.refundId ||
+      payment.amount !== receipt.amount ||
+      payment.customerId !== this.ticket(run.ticketId).customerId ||
+      payment.currency !== "USD" ||
+      this.ticket(run.ticketId).customerEmail !==
+        run.context?.ticket?.customerEmail
+    )
+      throw new Error(
+        "Receipt no longer matches the checkpoint; human review required",
+      );
+    if (
+      step.skillId === "send_customer_reply" &&
+      this.state.messages.some(
+        (m) => m.ticketId === run.ticketId && m.refundId === receipt.refundId,
+      )
+    )
+      throw new Error("Confirmation already exists; human review required");
+    if (["resolved", "closed"].includes(this.ticket(run.ticketId).status))
+      throw new Error("Ticket already resolved");
+    delete step.error;
+    delete run.completedAt;
+    delete run.durationMs;
+    run.retryCount = (run.retryCount || 0) + 1;
+    await this.advance(run);
+    return structuredClone(run);
+  }
+  escalateRun(runId: string, reason: string) {
+    const run = this.state.runs.find((r) => r.id === runId);
+    if (!run || run.status !== "failed" || !reason.trim())
+      throw new Error("A failed run and review reason are required");
+    run.reviewRequired = true;
+    run.reviewReason = reason.trim().slice(0, 1000);
+    this.emit();
   }
   private async advance(run: WorkflowRun) {
     if (this.active.has(run.id)) throw new Error("Run is already executing");

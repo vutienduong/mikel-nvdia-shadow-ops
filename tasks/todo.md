@@ -1,0 +1,9 @@
+- [x] Live A/B/C/D acceptance and recorded evidence
+- [x] Workflow editor and immutable version history
+- [x] Editable refinement proposal
+- [x] Safe checkpoint retry and human escalation
+- [x] Date filters and real analytics
+- [x] Landing and architecture visual
+- [x] License and demo video
+- [x] Deployment configuration and handoff procedure (public deployment deferred by user)
+- [x] Final tests, documentation and commits

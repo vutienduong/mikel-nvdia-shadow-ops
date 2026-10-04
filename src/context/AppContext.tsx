@@ -27,6 +27,8 @@ import {
 } from "../domain/contracts";
 import { AppContext, type AppContextType } from "./context";
 
+import { archiveVersion, editWorkflow } from "../domain/lifecycle";
+
 const STORAGE_KEY = "shadowops_operations_v2";
 function readStorage<T>(key: string, fallback: T): T {
   try {
@@ -53,6 +55,8 @@ function loadOperations(): OperationsState {
     )
       return seed;
     saved.workflows.forEach(validateWorkflow);
+    saved.workflowVersions = saved.workflowVersions || [];
+    saved.workflowVersions.forEach(validateWorkflow);
     return saved;
   } catch {
     return seed;
@@ -393,9 +397,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   }
   const saveDraftWorkflow = (input: WorkflowDefinition) => {
     try {
-      const wf = validateWorkflow({ ...input, status: "active" });
-      engine.state.workflows.unshift(wf);
       const latest = demonstrations.current.at(-1);
+      const wf = validateWorkflow({
+        ...input,
+        status: "active",
+        sourceDemonstrationIds: latest ? [latest.id] : [],
+      });
+      engine.state.workflows.unshift(wf);
       if (latest) latest.workflowId = wf.id;
       localStorage.setItem(
         "shadowops_demonstrations",
@@ -441,6 +449,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         steps,
         version: wf.version + 1,
         demonstrationsCount: wf.demonstrationsCount + 1,
+        sourceDemonstrationIds: [
+          ...(wf.sourceDemonstrationIds || []),
+          ...demonstrations.current
+            .filter((d) => d.workflowId === wf.id)
+            .map((d) => d.id),
+        ].filter((id, i, all) => all.indexOf(id) === i),
         updatedAt: new Date().toISOString(),
         provenance: refinementProposal.provenance,
         decisionRules: [
@@ -457,6 +471,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           },
         ],
       });
+      engine.state.workflowVersions = [
+        ...(engine.state.workflowVersions || []),
+        archiveVersion(wf),
+      ];
       engine.state.workflows = engine.state.workflows.map((w) =>
         w.id === wf.id ? next : w,
       );
@@ -465,6 +483,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       showToast(`Workflow updated to v${next.version}.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Invalid refinement");
+    }
+  };
+  const updateWorkflow = (id: string, edited: unknown) => {
+    const current = engine.state.workflows.find((w) => w.id === id);
+    if (!current) throw new Error("Workflow no longer exists");
+    const result = editWorkflow(current, edited);
+    engine.state.workflowVersions = [
+      ...(engine.state.workflowVersions || []),
+      result.archived,
+    ];
+    engine.state.workflows = engine.state.workflows.map((w) =>
+      w.id === id ? result.current : w,
+    );
+    publish();
+    showToast(`Published ${result.current.name} v${result.current.version}.`);
+  };
+  const retryRun = async (id: string) => {
+    if (session.current || isInferring || busyReply.current.size) {
+      showToast("Finish the current demonstration before retrying.");
+      return;
+    }
+    const generation = epoch.current;
+    try {
+      setActiveRunId(id);
+      const result = await engine.retryRun(id);
+      if (generation !== epoch.current) return;
+      showToast(`Retry ${result.status}.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Retry failed");
+    }
+  };
+  const escalateRun = (id: string, reason: string) => {
+    try {
+      engine.escalateRun(id, reason);
+      showToast("Assigned to human review. Automatic retry is disabled.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Escalation failed");
     }
   };
   const issueRefund = async (
@@ -621,6 +676,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       showToast((error as Error).message);
     }
   };
+  // Engine snapshots clone arrays on every trace update; match only meaningful catalog changes.
+  const matchingCatalogKey = JSON.stringify(workflows);
+  const selectedTicketIsRunning = runs.some(
+    (run) => run.ticketId === selectedId &&
+      ["running", "queued", "waiting_approval"].includes(run.status),
+  );
   useEffect(() => {
     const controller = new AbortController();
     setMatchingWorkflow(null);
@@ -630,6 +691,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       busyReply.current.size > 0 ||
       !selectedTicket ||
       selectedTicket.status !== "open" ||
+      selectedTicketIsRunning ||
       !wf.length ||
       isTeaching ||
       isInferring
@@ -662,7 +724,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [
     selectedId,
     selectedTicket?.status,
-    workflows,
+    matchingCatalogKey,
+    selectedTicketIsRunning,
     aiMode,
     isTeaching,
     isInferring,
@@ -834,6 +897,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setRefinementProposal,
         applyRefinement,
         workflows,
+        workflowVersions: operations.workflowVersions || [],
+        workflowDemonstrations: demonstrations.current,
+        updateWorkflow,
+        retryRun,
+        escalateRun,
         runs,
         schedules,
         addSchedule,

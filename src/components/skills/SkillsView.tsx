@@ -20,15 +20,22 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 
+import { WorkflowEditor } from "../modals/WorkflowEditor";
+
 export const SkillsView: React.FC = () => {
   const {
     workflows,
+    workflowVersions,
+    workflowDemonstrations,
+    updateWorkflow,
     runs,
     setActiveTab,
     setSelectedTicketId,
     executeWorkflowOnTicket,
   } = useApp();
   const [selectedWfId, setSelectedWfId] = useState<string>("");
+  const [editing, setEditing] = useState(false);
+  const [historyVersion, setHistoryVersion] = useState<number | null>(null);
   const [showIR, setShowIR] = useState<boolean>(false);
 
   // Search & Filter state
@@ -126,6 +133,13 @@ export const SkillsView: React.FC = () => {
   return (
     <div className="flex-1 bg-zinc-950 p-6 overflow-y-auto">
       <div className="max-w-6xl mx-auto space-y-6">
+        {editing && currentWf && (
+          <WorkflowEditor
+            workflow={currentWf}
+            onSave={(edited) => updateWorkflow(currentWf.id, edited)}
+            onClose={() => setEditing(false)}
+          />
+        )}
         {/* Page Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -416,6 +430,12 @@ export const SkillsView: React.FC = () => {
 
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => setEditing(true)}
+                        className="text-xs text-indigo-300"
+                      >
+                        Edit workflow
+                      </button>
+                      <button
                         onClick={() => setShowIR(!showIR)}
                         className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 flex items-center gap-1.5 transition-colors cursor-pointer"
                       >
@@ -436,6 +456,75 @@ export const SkillsView: React.FC = () => {
                     </div>
                   </div>
 
+                  <label className="block text-xs text-zinc-400 mb-3">
+                    Version history{" "}
+                    <select
+                      aria-label="Workflow version history"
+                      className="bg-zinc-900 p-2 rounded border border-zinc-700"
+                      value={historyVersion ?? "current"}
+                      onChange={(e) =>
+                        setHistoryVersion(
+                          e.target.value === "current"
+                            ? null
+                            : Number(e.target.value),
+                        )
+                      }
+                    >
+                      <option value="current">
+                        Current v{currentWf.version}
+                      </option>
+                      {workflowVersions
+                        .filter((w) => w.id === currentWf.id)
+                        .map((w) => (
+                          <option key={w.version} value={w.version}>
+                            Archived v{w.version}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <details className="text-xs text-zinc-400 mb-3">
+                    <summary className="cursor-pointer">
+                      Source demonstrations
+                    </summary>
+                    {workflowDemonstrations
+                      .filter((d) =>
+                        (historyVersion === null
+                          ? currentWf
+                          : workflowVersions.find(
+                              (w) =>
+                                w.id === currentWf.id &&
+                                w.version === historyVersion,
+                            )
+                        )?.sourceDemonstrationIds?.includes(d.id),
+                      )
+                      .map((d) => (
+                        <details key={d.id} className="p-2">
+                          <summary>
+                            {d.ticketId} · {d.events.length} actions · {d.id}
+                          </summary>
+                          <pre className="max-h-64 overflow-auto">
+                            {JSON.stringify(d.events, null, 2)}
+                          </pre>
+                        </details>
+                      ))}
+                  </details>
+                  {historyVersion !== null &&
+                    workflowVersions.find(
+                      (w) =>
+                        w.id === currentWf.id && w.version === historyVersion,
+                    ) && (
+                      <pre className="bg-zinc-950 p-3 text-xs overflow-auto max-h-96 mb-3">
+                        {JSON.stringify(
+                          workflowVersions.find(
+                            (w) =>
+                              w.id === currentWf.id &&
+                              w.version === historyVersion,
+                          ),
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    )}
                   {showIR ? (
                     <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800 font-mono text-xs text-indigo-300 overflow-x-auto max-h-[500px]">
                       <pre>{JSON.stringify(currentWf, null, 2)}</pre>

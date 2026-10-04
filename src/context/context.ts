@@ -13,6 +13,7 @@ import type {
   SkillSchedule,
   AIProvenance,
   CustomerMessage,
+  Demonstration,
 } from "../types";
 
 export interface AppContextType {
@@ -117,6 +118,11 @@ export interface AppContextType {
 
   // Workflows & Runs
   workflows: WorkflowDefinition[];
+  workflowVersions: WorkflowDefinition[];
+  workflowDemonstrations: Demonstration[];
+  updateWorkflow: (id: string, edited: unknown) => void;
+  retryRun: (id: string) => Promise<void>;
+  escalateRun: (id: string, reason: string) => void;
   runs: WorkflowRun[];
   activeExecutionRun: WorkflowRun | null;
   setActiveExecutionRun: (run: WorkflowRun | null) => void;

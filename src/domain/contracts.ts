@@ -145,6 +145,8 @@ export const WorkflowSchema = z
     createdAt: text,
     updatedAt: text,
     demonstrationsCount: z.number().int().nonnegative(),
+    sourceDemonstrationIds: z.array(text).optional(),
+    humanEditedAt: z.string().optional(),
     decisionRules: z
       .array(
         z

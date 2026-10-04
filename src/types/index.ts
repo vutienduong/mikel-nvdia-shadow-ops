@@ -130,6 +130,8 @@ export interface WorkflowDefinition {
   updatedAt: string;
   demonstrationsCount: number;
   decisionRules: DecisionRule[];
+  sourceDemonstrationIds?: string[];
+  humanEditedAt?: string;
   provenance?: AIProvenance;
 }
 
@@ -162,6 +164,9 @@ export interface WorkflowRun {
   definition?: WorkflowDefinition;
   context?: Record<string, any>;
   nextStep?: number;
+  reviewRequired?: boolean;
+  reviewReason?: string;
+  retryCount?: number;
 }
 
 export interface AIProvenance {

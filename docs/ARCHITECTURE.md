@@ -1,6 +1,6 @@
 # ShadowOps — current architecture
 
-Verified on 2026-10-05 through source inspection, automated domain/AI/HTTP tests, TypeScript check, Vite build and local offline browser journeys. Nebius live calls and production deployment are unverified.
+Verified on 2026-10-05 through source inspection, automated domain/AI/HTTP tests, TypeScript check, Vite build and local offline browser journeys. Live A/B/C/D acceptance is recorded in [evidence](evidence/live-acceptance.json); production deployment is unverified.
 
 ## Components
 
@@ -26,7 +26,7 @@ Policy eligibility uses structured USD thresholds and a 48-hour duplicate window
 2. Stop & Learn requires resolved business state, normalizes adjacent redundant events, then sends induction or comparison input. Comparison includes saved prior demonstration traces.
 3. Live mode selects/configures an available Nemotron model from `/v1/models`, calls `/v1/chat/completions`, parses JSON and validates core IR/proposals. Server-owned policies and skill contracts constrain the model; ticket text is treated as data.
 4. The server stamps workflow metadata and provider/model/mode/request provenance. Client validates again before save/refine.
-5. Accepted proposals use the specified target, condition and step. Whole updated workflow validation happens before publication. Same/new classifications are handled separately. Run definitions preserve execution versions, but a separate workflow version archive is not implemented.
+5. Accepted proposals use the specified target, condition and step. Whole updated workflow validation happens before publication. Same/new classifications are handled separately. Run definitions preserve execution versions. Published edits/refinements deep-clone previous definitions into OperationsState.workflowVersions; sourceDemonstrationIds attribute learning evidence and humanEditedAt identifies reviewed modifications.
 
 Live output remains untrusted data: it is never executed as JavaScript, shell commands or arbitrary tool names. The configured model must be a catalogued Nemotron variant. Fast/deep model variables are optional; endpoint allowlisting requires HTTPS Nebius Token Factory hosts. The server loads ignored `.env.local` before `.env`, with exported environment variables taking precedence. Secrets never enter browser variables or result payloads.
 
@@ -40,7 +40,7 @@ Conditional approval steps evaluate the actual IR condition. Independently, a hi
 
 Refund mutates only the verified duplicate ledger entry and records its receipt/ticket. Draft calls the configured AI mode using actual refund facts. Send verifies receipt/amount and persists the mock message. Close requires that message and refunded payment. Exceptions persist failed trace/error; completed durations come from real timestamps, with no artificial delays or fixed success summaries.
 
-Waiting checkpoints survive a refresh in the same browser. Interrupted `running`/`queued` runs become failed and require ledger review, avoiding blind replay after a partially completed effect. General crash-safe server recovery, cross-browser coordination and retry are not implemented.
+Waiting checkpoints survive a refresh in the same browser. Interrupted `running`/`queued` runs become failed and require ledger review, avoiding blind replay after a partially completed effect. General crash-safe server recovery and cross-browser coordination remain outside scope. Explicit retry is allowed only for a failed communication/closure step with completed prerequisites and a matching ticket-owned USD receipt. It resumes the same frozen definition/checkpoint; ambiguous interrupted effects are refused. Escalation records reviewRequired/reviewReason and freezes retry.
 
 Reset increments a generation token, aborts in-flight HTTP requests, replaces engine state and clears sessions/history. Late execution/reply results fail the generation check before mutation; late learning results cannot publish a workflow. Hiding an execution modal does not delete its run.
 
@@ -48,4 +48,8 @@ Reset increments a generation token, aborts in-flight HTTP requests, replaces en
 
 [Operations tests](../tests/operations.test.ts) cover approval, receipt ownership, duplicate windows, unsafe IR, argument/condition execution, concurrency and reset. [AI tests](../tests/ai.test.ts) verify model catalog/transport/schema behavior with stubbed provider responses and explicit fixtures. [HTTP integration tests](../tests/api.test.ts) cover malformed/error responses and the full offline A/B/C/D sequence.
 
-[package.json](../package.json) defines dev/start, test, TypeScript check and Vite build; [lockfile](../package-lock.json) makes npm setup repeatable. [.env.example](../.env.example) documents server-only configuration. No deployment or paid-provider call was performed. See [README](../README.md) for execution commands and [gap analysis](PRD_GAP_ANALYSIS.md) for P1/P2 work.
+[package.json](../package.json) defines dev/start, test, TypeScript check and Vite build; [lockfile](../package-lock.json) makes npm setup repeatable. [.env.example](../.env.example) documents server-only configuration. Live Nebius inference was performed for local acceptance; Vercel authentication is blocked on this machine; [deployment on another machine](DEPLOYMENT.md) is documented and remains unverified. See [README](../README.md) for execution commands and [gap analysis](PRD_GAP_ANALYSIS.md) for P1/P2 work.
+
+## Demo presentation and routing
+
+Matching keys off catalog content and ticket status, and pauses during execution; cloned trace snapshots no longer trigger repeated inference. `/` lazy-loads the landing; `/app` renders the existing workspace. `api/index.ts` exports the Express app for Vercel; `vercel.json` routes API requests to the function and frontend paths to the SPA. Vercel runtime secrets are separate from ignored local env files. [lifecycle.ts](../src/domain/lifecycle.ts) centralizes immutable edits, inclusive time filters, terminal analytics and exact USD amount parsing. Formatted `$1,100.00` is accepted while a different amount such as `$11000` is rejected. See [demo package](DEMO.md) for the architecture diagram and presentation script.

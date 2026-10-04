@@ -1,5 +1,11 @@
 # Đối chiếu implementation với PRD
 
+## Cập nhật hoàn thiện demo — 2026-10-05
+
+Live Nebius/Nemotron acceptance A/B/C/D đã pass ([evidence](evidence/live-acceptance.json)). Đã bổ sung editor draft/published workflow, archive versions/source demonstration IDs, edit threshold khi review refinement, safe retry communication checkpoint, human escalation, date filters và analytics từ dữ liệu run. Landing, Vercel adapter/config và MIT license đã có. Xem [demo package](DEMO.md) cho trạng thái video/deploy. Database server-side, automatic scheduling và integrations thật vẫn ngoài scope.
+
+Các đoạn audit bên dưới là lịch sử trước/sau; những mô tả chưa có editor/version/retry hoặc chưa có key không phản ánh hiện trạng mới.
+
 ## Cập nhật sau triển khai P0 — 2026-10-05
 
 Các phần P0 bên dưới đã được triển khai: refund/policy/approval guard dùng chung; pause/approve/reject/resume; runtime IR validator, reference/condition evaluator và executable handlers; clean reset; Nebius/Nemotron client với model catalog, validation và provenance; duplicate cùng account/currency/plan trong 48 giờ; receipt và reply đúng ticket; closure prerequisites; lưu failed/waiting runs; chống chạy lặp và invalidation khi reset.

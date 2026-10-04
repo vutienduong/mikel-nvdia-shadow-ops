@@ -14,13 +14,16 @@ import {
 } from "lucide-react";
 import { WorkflowDefinition } from "../../types";
 
+import { WorkflowEditor } from "./WorkflowEditor";
+
 interface Props {
   workflow: WorkflowDefinition;
   onClose: () => void;
 }
 
 export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
-  const { saveDraftWorkflow } = useApp();
+  const { saveDraftWorkflow, setDraftWorkflow } = useApp();
+  const [editing, setEditing] = useState(false);
   const [viewMode, setViewMode] = useState<"visual" | "json">("visual");
 
   return (
@@ -143,6 +146,13 @@ export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
           )}
         </div>
 
+        {editing && (
+          <WorkflowEditor
+            workflow={workflow}
+            onSave={setDraftWorkflow}
+            onClose={() => setEditing(false)}
+          />
+        )}
         {/* Footer */}
         <div className="p-4 border-t border-zinc-800 bg-zinc-950/80 flex items-center justify-between">
           <div className="text-[11px] text-zinc-500 font-mono">
@@ -150,6 +160,12 @@ export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEditing(true)}
+              className="px-3 py-2 text-indigo-300"
+            >
+              Edit draft
+            </button>
             <button
               onClick={onClose}
               className="px-3.5 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"

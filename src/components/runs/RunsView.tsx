@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { useApp } from '../../context/AppContext';
-import { WorkflowRun } from '../../types';
+import React, { useState, useMemo } from "react";
+import { useApp } from "../../context/AppContext";
+import { WorkflowRun } from "../../types";
 import {
   History,
   CheckCircle2,
@@ -17,33 +17,48 @@ import {
   X,
   ArrowUpDown,
   Calendar,
-} from 'lucide-react';
+} from "lucide-react";
+
+import { filterRuns } from "../../domain/lifecycle";
 
 export const RunsView: React.FC = () => {
-  const { runs, setActiveTab, setSelectedTicketId } = useApp();
-  const [selectedRunId, setSelectedRunId] = useState<string>('');
+  const {
+    runs,
+    setActiveTab,
+    setSelectedTicketId,
+    retryRun,
+    escalateRun,
+    setActiveExecutionRun,
+  } = useApp();
+  const [selectedRunId, setSelectedRunId] = useState<string>("");
 
   // Search & Filter state
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'failed' | 'running'>('all');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'fastest' | 'steps'>('newest');
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | WorkflowRun["status"]
+  >("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "7d" | "30d">(
+    "all",
+  );
+  const [sortBy, setSortBy] = useState<
+    "newest" | "oldest" | "fastest" | "steps"
+  >("newest");
 
   // Filtered & sorted runs
   const filteredRuns = useMemo(() => {
-    return runs
+    const now = new Date();
+    const start =
+      dateFilter === "today"
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        : dateFilter === "all"
+          ? null
+          : new Date(now.getTime() - (dateFilter === "7d" ? 7 : 30) * 86400000);
+    return filterRuns(runs, {
+      status: statusFilter,
+      from: start?.toISOString(),
+      to: dateFilter === "all" ? undefined : now.toISOString(),
+    })
       .filter((r) => {
-        // Status filter
-        if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-
-        // Date filter
-        if (dateFilter !== 'all') {
-          const runDateStr = r.startedAt.toLowerCase();
-          if (dateFilter === 'today' && !runDateStr.includes('today') && !runDateStr.includes('2026-10-15') && !runDateStr.includes(':')) {
-            return false;
-          }
-        }
-
         // Search query
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
@@ -51,23 +66,37 @@ export const RunsView: React.FC = () => {
           const matchName = r.workflowName.toLowerCase().includes(q);
           const matchCust = r.customerName.toLowerCase().includes(q);
           const matchTicket = r.ticketId.toLowerCase().includes(q);
-          const matchOutcome = r.outcomeSummary?.toLowerCase().includes(q) || false;
-          if (!matchId && !matchName && !matchCust && !matchTicket && !matchOutcome) return false;
+          const matchOutcome =
+            r.outcomeSummary?.toLowerCase().includes(q) || false;
+          if (
+            !matchId &&
+            !matchName &&
+            !matchCust &&
+            !matchTicket &&
+            !matchOutcome
+          )
+            return false;
         }
 
         return true;
       })
       .sort((a, b) => {
-        if (sortBy === 'newest') {
-          return new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime() || b.id.localeCompare(a.id);
+        if (sortBy === "newest") {
+          return (
+            new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime() ||
+            b.id.localeCompare(a.id)
+          );
         }
-        if (sortBy === 'oldest') {
-          return new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime() || a.id.localeCompare(b.id);
+        if (sortBy === "oldest") {
+          return (
+            new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime() ||
+            a.id.localeCompare(b.id)
+          );
         }
-        if (sortBy === 'fastest') {
-          return (a.durationMs || 1420) - (b.durationMs || 1420);
+        if (sortBy === "fastest") {
+          return (a.durationMs ?? Infinity) - (b.durationMs ?? Infinity);
         }
-        if (sortBy === 'steps') {
+        if (sortBy === "steps") {
           return b.steps.length - a.steps.length;
         }
         return 0;
@@ -75,19 +104,19 @@ export const RunsView: React.FC = () => {
   }, [runs, statusFilter, dateFilter, searchQuery, sortBy]);
 
   const selectedRun =
-    filteredRuns.find((r) => r.id === selectedRunId) ||
-    filteredRuns[0] ||
-    runs[0] ||
-    null;
+    filteredRuns.find((r) => r.id === selectedRunId) || filteredRuns[0] || null;
 
   const isFilterActive =
-    searchQuery.trim() !== '' || statusFilter !== 'all' || dateFilter !== 'all' || sortBy !== 'newest';
+    searchQuery.trim() !== "" ||
+    statusFilter !== "all" ||
+    dateFilter !== "all" ||
+    sortBy !== "newest";
 
   const resetFilters = () => {
-    setSearchQuery('');
-    setStatusFilter('all');
-    setDateFilter('all');
-    setSortBy('newest');
+    setSearchQuery("");
+    setStatusFilter("all");
+    setDateFilter("all");
+    setSortBy("newest");
   };
 
   return (
@@ -101,12 +130,13 @@ export const RunsView: React.FC = () => {
               Autonomous Run History & Audit Logs
             </h1>
             <p className="text-xs text-zinc-400 mt-1">
-              End-to-end trace logs for every autonomous workflow executed by ShadowOps.
+              End-to-end trace logs for every autonomous workflow executed by
+              ShadowOps.
             </p>
           </div>
 
           <span className="font-mono text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg">
-            {runs.length} Total Run{runs.length !== 1 ? 's' : ''} Logged
+            {runs.length} Total Run{runs.length !== 1 ? "s" : ""} Logged
           </span>
         </div>
 
@@ -125,7 +155,7 @@ export const RunsView: React.FC = () => {
               />
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => setSearchQuery("")}
                   className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -137,39 +167,53 @@ export const RunsView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {/* Status Filter */}
               <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
-                <span className="text-[10px] text-zinc-500 px-1 font-mono uppercase">Status:</span>
+                <span className="text-[10px] text-zinc-500 px-1 font-mono uppercase">
+                  Status:
+                </span>
                 <button
-                  onClick={() => setStatusFilter('all')}
+                  onClick={() => setStatusFilter("all")}
                   className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    statusFilter === 'all'
-                      ? 'bg-zinc-800 text-white font-semibold'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    statusFilter === "all"
+                      ? "bg-zinc-800 text-white font-semibold"
+                      : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
                   All
                 </button>
                 <button
-                  onClick={() => setStatusFilter('completed')}
+                  onClick={() => setStatusFilter("completed")}
                   className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    statusFilter === 'completed'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80 font-semibold'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    statusFilter === "completed"
+                      ? "bg-emerald-950 text-emerald-300 border border-emerald-800/80 font-semibold"
+                      : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
                   Completed
                 </button>
                 <button
-                  onClick={() => setStatusFilter('failed')}
+                  onClick={() => setStatusFilter("failed")}
                   className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    statusFilter === 'failed'
-                      ? 'bg-red-950 text-red-300 border border-red-800/80 font-semibold'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    statusFilter === "failed"
+                      ? "bg-red-950 text-red-300 border border-red-800/80 font-semibold"
+                      : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
                   Halted / Guardrail
                 </button>
               </div>
 
+              <button
+                onClick={() => setStatusFilter("waiting_approval")}
+                className="text-amber-300"
+              >
+                Waiting approval
+              </button>
+              <button
+                onClick={() => setStatusFilter("running")}
+                className="text-indigo-300"
+              >
+                Running
+              </button>
               {/* Date Filter */}
               <div className="flex items-center gap-1.5 bg-zinc-950 px-2 py-1.5 rounded-lg border border-zinc-800 text-zinc-400">
                 <Calendar className="w-3.5 h-3.5 text-zinc-500" />
@@ -232,23 +276,29 @@ export const RunsView: React.FC = () => {
           {/* Active summary label */}
           <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 pt-1 border-t border-zinc-800/60">
             <span>
-              Showing <strong className="text-zinc-200">{filteredRuns.length}</strong> of{' '}
-              {runs.length} execution runs
+              Showing{" "}
+              <strong className="text-zinc-200">{filteredRuns.length}</strong>{" "}
+              of {runs.length} execution runs
               {searchQuery && ` matching "${searchQuery}"`}
             </span>
-            <span className="text-zinc-500">Filterable by name, execution status, and timestamp</span>
+            <span className="text-zinc-500">
+              Filterable by name, execution status, and timestamp
+            </span>
           </div>
         </div>
 
         {runs.length === 0 ? (
           <div className="bg-zinc-900/40 border border-dashed border-zinc-800 rounded-2xl p-12 text-center space-y-3">
             <History className="w-10 h-10 text-zinc-600 mx-auto" />
-            <h3 className="text-base font-semibold text-zinc-300">No Autonomous Runs Yet</h3>
+            <h3 className="text-base font-semibold text-zinc-300">
+              No Autonomous Runs Yet
+            </h3>
             <p className="text-xs text-zinc-500 max-w-md mx-auto leading-relaxed">
-              Once you induce a workflow from demonstration, you can run it autonomously on any matching ticket (like #1044 Daniel Lee).
+              Once you induce a workflow from demonstration, you can run it
+              autonomously on any matching ticket (like #1044 Daniel Lee).
             </p>
             <button
-              onClick={() => setActiveTab('workspace')}
+              onClick={() => setActiveTab("workspace")}
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors cursor-pointer"
             >
               Go to Workspace
@@ -257,9 +307,12 @@ export const RunsView: React.FC = () => {
         ) : filteredRuns.length === 0 ? (
           <div className="bg-zinc-900/40 border border-dashed border-zinc-800 rounded-2xl p-10 text-center space-y-3">
             <Search className="w-8 h-8 text-zinc-600 mx-auto" />
-            <h3 className="text-sm font-semibold text-zinc-300">No execution runs match your search or filters</h3>
+            <h3 className="text-sm font-semibold text-zinc-300">
+              No execution runs match your search or filters
+            </h3>
             <p className="text-xs text-zinc-500">
-              Try adjusting your query or resetting filters to view all historical runs.
+              Try adjusting your query or resetting filters to view all
+              historical runs.
             </p>
             <button
               onClick={resetFilters}
@@ -278,7 +331,9 @@ export const RunsView: React.FC = () => {
 
               {filteredRuns.map((r) => {
                 const isSelected = selectedRun?.id === r.id;
-                const completedStepsCount = r.steps.filter((s) => s.status === 'completed').length;
+                const completedStepsCount = r.steps.filter(
+                  (s) => s.status === "completed",
+                ).length;
 
                 return (
                   <div
@@ -286,8 +341,8 @@ export const RunsView: React.FC = () => {
                     onClick={() => setSelectedRunId(r.id)}
                     className={`p-4 rounded-xl border cursor-pointer transition-all ${
                       isSelected
-                        ? 'bg-zinc-900 border-indigo-500/80 shadow-md shadow-indigo-950/40'
-                        : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+                        ? "bg-zinc-900 border-indigo-500/80 shadow-md shadow-indigo-950/40"
+                        : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
@@ -296,26 +351,32 @@ export const RunsView: React.FC = () => {
                       </span>
                       <span
                         className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded font-semibold ${
-                          r.status === 'completed'
-                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
-                            : r.status === 'failed'
-                            ? 'bg-red-950/80 text-red-300 border border-red-800'
-                            : 'bg-amber-950/80 text-amber-300 border border-amber-800'
+                          r.status === "completed"
+                            ? "bg-emerald-950/80 text-emerald-300 border border-emerald-800"
+                            : r.status === "failed"
+                              ? "bg-red-950/80 text-red-300 border border-red-800"
+                              : "bg-amber-950/80 text-amber-300 border border-amber-800"
                         }`}
                       >
                         {r.status}
                       </span>
                     </div>
 
-                    <h4 className="text-xs font-semibold text-white mb-0.5">{r.workflowName}</h4>
+                    <h4 className="text-xs font-semibold text-white mb-0.5">
+                      {r.workflowName}
+                    </h4>
                     <p className="text-[11px] text-zinc-400 mb-2">
                       Target: {r.customerName} (#{r.ticketId})
                     </p>
 
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 pt-2 border-t border-zinc-800/60">
-                      <span>{completedStepsCount}/{r.steps.length} Steps</span>
+                      <span>
+                        {completedStepsCount}/{r.steps.length} Steps
+                      </span>
                       <span>•</span>
-                      <span>{r.durationMs || 1420}ms</span>
+                      <span>
+                        {r.durationMs === undefined ? "—" : `${r.durationMs}ms`}
+                      </span>
                       <span>•</span>
                       <span>{r.startedAt}</span>
                     </div>
@@ -331,20 +392,27 @@ export const RunsView: React.FC = () => {
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-4">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-base font-bold text-white">Execution Trace: #{selectedRun.id}</h2>
+                        <h2 className="text-base font-bold text-white">
+                          Execution Trace: #{selectedRun.id}
+                        </h2>
                         <span className="text-xs font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">
                           v{selectedRun.workflowVersion}
                         </span>
                       </div>
                       <p className="text-xs text-zinc-400 mt-1">
-                        Workflow: <strong className="text-zinc-200">{selectedRun.workflowName}</strong> • Ticket: #{selectedRun.ticketId} ({selectedRun.customerName})
+                        Workflow:{" "}
+                        <strong className="text-zinc-200">
+                          {selectedRun.workflowName}
+                        </strong>{" "}
+                        • Ticket: #{selectedRun.ticketId} (
+                        {selectedRun.customerName})
                       </p>
                     </div>
 
                     <button
                       onClick={() => {
                         setSelectedTicketId(selectedRun.ticketId);
-                        setActiveTab('workspace');
+                        setActiveTab("workspace");
                       }}
                       className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
@@ -356,11 +424,52 @@ export const RunsView: React.FC = () => {
                   {/* Outcome Alert */}
                   {selectedRun.outcomeSummary && (
                     <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 flex items-center gap-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      <AlertCircle className="w-4 h-4 text-zinc-400 flex-shrink-0" />
                       <span>{selectedRun.outcomeSummary}</span>
                     </div>
                   )}
 
+                  {selectedRun.status === "waiting_approval" && (
+                    <button
+                      onClick={() => setActiveExecutionRun(selectedRun)}
+                      className="text-amber-300 text-sm"
+                    >
+                      Review approval checkpoint
+                    </button>
+                  )}
+                  {selectedRun.status === "failed" && (
+                    <div className="flex flex-wrap gap-3 text-xs p-3 border border-zinc-800 rounded-lg">
+                      {selectedRun.reviewRequired ? (
+                        <p className="text-amber-300">
+                          Human review: {selectedRun.reviewReason}
+                        </p>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => retryRun(selectedRun.id)}
+                            className="text-indigo-300"
+                          >
+                            Retry failed checkpoint
+                          </button>
+                          <button
+                            onClick={() =>
+                              escalateRun(
+                                selectedRun.id,
+                                "Operations manager to review failure and existing ledger receipt",
+                              )
+                            }
+                            className="text-amber-300"
+                          >
+                            Assign human review
+                          </button>
+                          <p className="text-zinc-500">
+                            Retry is permitted only after a verified refund, at
+                            a failed reply/closure step.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
                   {/* Step Execution Sequence */}
                   <div className="space-y-3">
                     <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">
@@ -375,21 +484,25 @@ export const RunsView: React.FC = () => {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
-                              {st.status === 'completed' ? (
+                              {st.status === "completed" ? (
                                 <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                              ) : st.status === 'skipped' ? (
+                              ) : st.status === "skipped" ? (
                                 <FastForward className="w-4 h-4 text-amber-400 flex-shrink-0" />
                               ) : (
                                 <ShieldAlert className="w-4 h-4 text-red-400 flex-shrink-0" />
                               )}
-                              <span className="font-semibold text-white">{st.name}</span>
+                              <span className="font-semibold text-white">
+                                {st.name}
+                              </span>
                               <span className="font-mono text-[10px] text-zinc-500">
                                 ({st.skillId})
                               </span>
                             </div>
 
                             <span className="font-mono text-[11px] text-zinc-400">
-                              {st.latencyMs > 0 ? `${st.latencyMs}ms` : 'skipped'}
+                              {st.latencyMs > 0
+                                ? `${st.latencyMs}ms`
+                                : "skipped"}
                             </span>
                           </div>
 

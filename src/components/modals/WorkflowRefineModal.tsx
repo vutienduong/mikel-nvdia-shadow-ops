@@ -17,7 +17,7 @@ interface Props {
 }
 
 export const WorkflowRefineModal: React.FC<Props> = ({ proposal, onClose }) => {
-  const { applyRefinement, workflows } = useApp();
+  const { applyRefinement, workflows, setRefinementProposal } = useApp();
   const currentWorkflow = workflows.find((w) => w.id === proposal.workflowId);
 
   return (
@@ -81,6 +81,29 @@ export const WorkflowRefineModal: React.FC<Props> = ({ proposal, onClose }) => {
             </div>
           </div>
 
+          <label className="block text-xs text-zinc-300">
+            Review approval threshold
+            <input
+              aria-label="Refinement threshold"
+              type="number"
+              className="block mt-2 p-2 bg-zinc-950 border border-zinc-700 rounded"
+              value={proposal.condition?.value ?? 500}
+              onChange={(e) => {
+                const condition = {
+                  ...proposal.condition,
+                  value: Number(e.target.value),
+                  description: `Manager approval when ${proposal.condition.field} ${proposal.condition.operator} ${Number(e.target.value)}`,
+                };
+                setRefinementProposal({
+                  ...proposal,
+                  condition,
+                  conditionStr: `${condition.field} ${condition.operator} ${condition.value}`,
+                  ruleDescription: condition.description,
+                  insertedStep: { ...proposal.insertedStep, condition },
+                });
+              }}
+            />
+          </label>
           {/* Reasoning Diff */}
           <div className="space-y-2 text-xs">
             <h5 className="font-medium text-zinc-300">

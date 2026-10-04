@@ -1,15 +1,18 @@
-import React from 'react';
-import { AppProvider, useApp } from './context/AppContext';
-import { Navbar } from './components/layout/Navbar';
-import { WorkspaceView } from './components/workspace/WorkspaceView';
-import { SkillsView } from './components/skills/SkillsView';
-import { RunsView } from './components/runs/RunsView';
-import { AnalyticsView } from './components/analytics/AnalyticsView';
-import { SchedulesView } from './components/schedules/SchedulesView';
-import { WorkflowDraftModal } from './components/modals/WorkflowDraftModal';
-import { WorkflowRefineModal } from './components/modals/WorkflowRefineModal';
-import { ExecutionModal } from './components/modals/ExecutionModal';
-import { Bell, Info } from 'lucide-react';
+import React, { Suspense, lazy } from "react";
+const Landing = lazy(() =>
+  import("./components/Landing").then((m) => ({ default: m.Landing })),
+);
+import { AppProvider, useApp } from "./context/AppContext";
+import { Navbar } from "./components/layout/Navbar";
+import { WorkspaceView } from "./components/workspace/WorkspaceView";
+import { SkillsView } from "./components/skills/SkillsView";
+import { RunsView } from "./components/runs/RunsView";
+import { AnalyticsView } from "./components/analytics/AnalyticsView";
+import { SchedulesView } from "./components/schedules/SchedulesView";
+import { WorkflowDraftModal } from "./components/modals/WorkflowDraftModal";
+import { WorkflowRefineModal } from "./components/modals/WorkflowRefineModal";
+import { ExecutionModal } from "./components/modals/ExecutionModal";
+import { Bell, Info } from "lucide-react";
 
 const AppContent: React.FC = () => {
   const {
@@ -30,11 +33,11 @@ const AppContent: React.FC = () => {
 
       {/* Main Screen Content */}
       <div className="flex-1 flex overflow-hidden">
-        {activeTab === 'workspace' && <WorkspaceView />}
-        {activeTab === 'skills' && <SkillsView />}
-        {activeTab === 'runs' && <RunsView />}
-        {activeTab === 'analytics' && <AnalyticsView />}
-        {activeTab === 'schedules' && <SchedulesView />}
+        {activeTab === "workspace" && <WorkspaceView />}
+        {activeTab === "skills" && <SkillsView />}
+        {activeTab === "runs" && <RunsView />}
+        {activeTab === "analytics" && <AnalyticsView />}
+        {activeTab === "schedules" && <SchedulesView />}
       </div>
 
       {/* Case A: Workflow Draft / Induction Modal */}
@@ -73,6 +76,14 @@ const AppContent: React.FC = () => {
 };
 
 export default function App() {
+  if (window.location.pathname === "/")
+    return (
+      <Suspense
+        fallback={<div className="bg-zinc-950 text-white p-8">ShadowOps</div>}
+      >
+        <Landing />
+      </Suspense>
+    );
   return (
     <AppProvider>
       <AppContent />

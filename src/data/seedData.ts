@@ -143,6 +143,7 @@ export const INITIAL_POLICIES: Policy[] = [
   {
     id: 'POL_REFUND_01',
     title: 'Duplicate Payment Resolution Policy',
+    duplicateWindowHours: 48,
     category: 'Billing & Refunds',
     thresholdAmount: 500,
     lastUpdated: '2026-08-01',

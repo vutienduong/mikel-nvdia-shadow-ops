@@ -1,0 +1,6 @@
+{
+  "name": "ShadowOps",
+  "description": "Turn human work into reusable AI skills. Workflow induction, refinement, and autonomous execution from operational demonstrations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

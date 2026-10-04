@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useRef } from "react";
 import {
   Ticket,
   Customer,
@@ -8,827 +8,673 @@ import {
   ObservationEvent,
   WorkflowDefinition,
   WorkflowRun,
-  WorkflowRunStep,
   ActivityItem,
   SkillSchedule,
-} from '../types';
+  AIProvenance,
+  CustomerMessage,
+  Demonstration,
+} from "../types";
 import {
-  INITIAL_TICKETS,
-  INITIAL_CUSTOMERS,
-  INITIAL_PAYMENTS,
-  INITIAL_POLICIES,
-  INITIAL_APPROVALS,
-  INITIAL_WORKFLOWS,
-  INITIAL_ACTIVITIES,
-  INITIAL_RUNS,
-  INITIAL_SCHEDULES,
-} from '../data/seedData';
-import { SKILL_REGISTRY } from '../data/skillRegistry';
+  OperationsEngine,
+  createDemoState,
+  type OperationsState,
+} from "../domain/operations";
+import {
+  validateWorkflow,
+  ProposalSchema,
+  MatchSchema,
+  WorkflowSchema,
+} from "../domain/contracts";
+import { AppContext, type AppContextType } from "./context";
 
-interface AppContextType {
-  // Navigation
-  activeTab: 'workspace' | 'skills' | 'runs' | 'analytics' | 'schedules';
-  setActiveTab: (tab: 'workspace' | 'skills' | 'runs' | 'analytics' | 'schedules') => void;
-  workspaceSubTab: 'inbox' | 'customers' | 'payments' | 'policies' | 'approvals' | 'activity';
-  setWorkspaceSubTab: (tab: 'inbox' | 'customers' | 'payments' | 'policies' | 'approvals' | 'activity') => void;
-
-  // Schedules (Cron-based automated skill triggers)
-  schedules: SkillSchedule[];
-  addSchedule: (sched: Omit<SkillSchedule, 'id' | 'createdAt' | 'executionCount' | 'successCount' | 'failureCount'>) => void;
-  updateSchedule: (id: string, updates: Partial<SkillSchedule>) => void;
-  toggleScheduleStatus: (id: string) => void;
-  deleteSchedule: (id: string) => void;
-  triggerScheduleNow: (id: string) => Promise<void>;
-
-  // Activity Drawer in Workspace
-  isActivityDrawerOpen: boolean;
-  setIsActivityDrawerOpen: (open: boolean) => void;
-  activities: ActivityItem[];
-  recordActivity: (activity: Omit<ActivityItem, 'id' | 'timestamp' | 'timeFormatted'> & Partial<Pick<ActivityItem, 'id' | 'timestamp' | 'timeFormatted'>>) => void;
-  clearActivities: () => void;
-
-  // Data
-  tickets: Ticket[];
-  customers: Customer[];
-  payments: Payment[];
-  policies: Policy[];
-  approvals: ApprovalRequest[];
-  selectedTicketId: string | null;
-  setSelectedTicketId: (id: string | null) => void;
-  selectedCustomer: Customer | null;
-  selectedPayments: Payment[];
-
-  // Teaching Mode & Brain
-  isTeaching: boolean;
-  startTeaching: () => void;
-  stopTeachingAndLearn: () => Promise<void>;
-  cancelTeaching: () => void;
-  observationEvents: ObservationEvent[];
-  recordAction: (
-    action: string,
-    entityType: 'customer' | 'payment' | 'policy' | 'approval' | 'ticket',
-    entityId: string,
-    label: string,
-    context?: Record<string, any>
-  ) => void;
-
-  // AI Workflow Draft & Refinement
-  isInferring: boolean;
-  draftWorkflow: WorkflowDefinition | null;
-  setDraftWorkflow: (wf: WorkflowDefinition | null) => void;
-  saveDraftWorkflow: (wf: WorkflowDefinition) => void;
-
-  refinementProposal: any | null;
-  setRefinementProposal: (proposal: any | null) => void;
-  applyRefinement: () => void;
-
-  // Workflows & Runs
-  workflows: WorkflowDefinition[];
-  runs: WorkflowRun[];
-  activeExecutionRun: WorkflowRun | null;
-  setActiveExecutionRun: (run: WorkflowRun | null) => void;
-  executeWorkflowOnTicket: (workflowId: string, ticketId: string) => Promise<void>;
-
-  // Manual Operations in Workspace
-  issueRefund: (paymentId: string, ticketId?: string) => Promise<string>;
-  submitApprovalRequest: (ticketId: string, amount: number, reason: string) => string;
-  approveRequest: (approvalId: string) => void;
-  rejectRequest: (approvalId: string) => void;
-  resolveTicket: (ticketId: string) => void;
-
-  // Reset
-  resetAll: () => void;
-
-  // Toast notifications
-  toastMessage: string | null;
-  showToast: (msg: string) => void;
+const STORAGE_KEY = "shadowops_operations_v2";
+function readStorage<T>(key: string, fallback: T): T {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "null") ?? fallback;
+  } catch {
+    return fallback;
+  }
 }
-
-const AppContext = createContext<AppContextType | null>(null);
-
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeTab, setActiveTab] = useState<'workspace' | 'skills' | 'runs' | 'analytics' | 'schedules'>('workspace');
-  const [workspaceSubTab, setWorkspaceSubTab] = useState<'inbox' | 'customers' | 'payments' | 'policies' | 'approvals' | 'activity'>('inbox');
-
-  const [tickets, setTickets] = useState<Ticket[]>(() => {
-    const saved = localStorage.getItem('shadowops_tickets');
-    return saved ? JSON.parse(saved) : INITIAL_TICKETS;
-  });
-
-  const [customers] = useState<Customer[]>(INITIAL_CUSTOMERS);
-
-  const [payments, setPayments] = useState<Payment[]>(() => {
-    const saved = localStorage.getItem('shadowops_payments');
-    return saved ? JSON.parse(saved) : INITIAL_PAYMENTS;
-  });
-
-  const [policies] = useState<Policy[]>(INITIAL_POLICIES);
-
-  const [approvals, setApprovals] = useState<ApprovalRequest[]>(() => {
-    const saved = localStorage.getItem('shadowops_approvals');
-    return saved ? JSON.parse(saved) : INITIAL_APPROVALS;
-  });
-
-  const [workflows, setWorkflows] = useState<WorkflowDefinition[]>(() => {
-    const saved = localStorage.getItem('shadowops_workflows');
-    return saved ? JSON.parse(saved) : INITIAL_WORKFLOWS;
-  });
-
-  const [runs, setRuns] = useState<WorkflowRun[]>(() => {
-    const saved = localStorage.getItem('shadowops_runs');
-    return saved ? JSON.parse(saved) : INITIAL_RUNS;
-  });
-
-  const [schedules, setSchedules] = useState<SkillSchedule[]>(() => {
-    const saved = localStorage.getItem('shadowops_schedules');
-    return saved ? JSON.parse(saved) : INITIAL_SCHEDULES;
-  });
-
-  const [activities, setActivities] = useState<ActivityItem[]>(() => {
-    const saved = localStorage.getItem('shadowops_activities');
-    return saved ? JSON.parse(saved) : INITIAL_ACTIVITIES;
-  });
-
-  const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState<boolean>(false);
-
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>('TICK_1042');
-
-  // Teach Mode
-  const [isTeaching, setIsTeaching] = useState<boolean>(false);
-  const [currentDemoId, setCurrentDemoId] = useState<string>('');
-  const [observationEvents, setObservationEvents] = useState<ObservationEvent[]>([]);
-  const [isInferring, setIsInferring] = useState<boolean>(false);
-  const [draftWorkflow, setDraftWorkflow] = useState<WorkflowDefinition | null>(null);
-  const [refinementProposal, setRefinementProposal] = useState<any | null>(null);
-  const [activeExecutionRun, setActiveExecutionRun] = useState<WorkflowRun | null>(null);
+function loadOperations(): OperationsState {
+  const seed = createDemoState(),
+    saved = readStorage<OperationsState>(STORAGE_KEY, seed);
+  try {
+    if (
+      ![
+        "tickets",
+        "customers",
+        "payments",
+        "policies",
+        "approvals",
+        "workflows",
+        "runs",
+        "messages",
+      ].every((k) => Array.isArray(saved[k as keyof OperationsState]))
+    )
+      return seed;
+    saved.workflows.forEach(validateWorkflow);
+    return saved;
+  } catch {
+    return seed;
+  }
+}
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [activeTab, setActiveTab] =
+    useState<AppContextType["activeTab"]>("workspace");
+  const [workspaceSubTab, setWorkspaceSubTab] =
+    useState<AppContextType["workspaceSubTab"]>("inbox");
+  const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
+  const [operations, setOperations] = useState<OperationsState>(loadOperations);
+  const [schedules, setSchedules] = useState<SkillSchedule[]>(() =>
+    readStorage("shadowops_schedules", []),
+  );
+  const [activities, setActivities] = useState<ActivityItem[]>(() =>
+    readStorage("shadowops_activities", []),
+  );
+  const [selectedId, setSelectedId] = useState<string | null>("TICK_1042");
+  const [isTeaching, setIsTeaching] = useState(false);
+  const [observationEvents, setObservationEvents] = useState<
+    ObservationEvent[]
+  >([]);
+  const [isInferring, setIsInferring] = useState(false);
+  const [draftWorkflow, setDraftWorkflow] = useState<WorkflowDefinition | null>(
+    null,
+  );
+  const [refinementProposal, setRefinementProposal] = useState<any | null>(
+    null,
+  );
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Sync to local storage
-  useEffect(() => {
-    localStorage.setItem('shadowops_tickets', JSON.stringify(tickets));
-  }, [tickets]);
-
-  useEffect(() => {
-    localStorage.setItem('shadowops_payments', JSON.stringify(payments));
-  }, [payments]);
-
-  useEffect(() => {
-    localStorage.setItem('shadowops_approvals', JSON.stringify(approvals));
-  }, [approvals]);
-
-  useEffect(() => {
-    localStorage.setItem('shadowops_workflows', JSON.stringify(workflows));
-  }, [workflows]);
-
-  useEffect(() => {
-    localStorage.setItem('shadowops_runs', JSON.stringify(runs));
-  }, [runs]);
-
-  useEffect(() => {
-    localStorage.setItem('shadowops_schedules', JSON.stringify(schedules));
-  }, [schedules]);
-
-  useEffect(() => {
-    localStorage.setItem('shadowops_activities', JSON.stringify(activities));
-  }, [activities]);
-
-  const recordActivity = (
-    activity: Omit<ActivityItem, 'id' | 'timestamp' | 'timeFormatted'> &
-      Partial<Pick<ActivityItem, 'id' | 'timestamp' | 'timeFormatted'>>
-  ) => {
-    const now = new Date();
-    const item: ActivityItem = {
-      id:
-        activity.id ||
-        'ACT_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 3),
-      timestamp: activity.timestamp || now.toISOString(),
-      timeFormatted: activity.timeFormatted || now.toLocaleTimeString(),
-      ...activity,
-    };
-    setActivities((prev) => [item, ...prev]);
-  };
-
-  const clearActivities = () => {
-    setActivities([]);
-    localStorage.removeItem('shadowops_activities');
-    showToast('Activity log cleared.');
-  };
-
+  const [learningError, setLearningError] = useState<string | null>(null);
+  const [aiMode, setMode] = useState<"live" | "offline_demo">(() =>
+    readStorage("shadowops_ai_mode", "live"),
+  );
+  const [aiConfigured, setAiConfigured] = useState(false);
+  const [matchingWorkflow, setMatchingWorkflow] =
+    useState<AppContextType["matchingWorkflow"]>(null);
+  const [matchingError, setMatchingError] = useState<string | null>(null);
+  const [isMatching, setIsMatching] = useState(false);
+  const aiModeRef = useRef(aiMode);
+  aiModeRef.current = aiMode;
+  const session = useRef<Demonstration | null>(null);
+  const demonstrations = useRef<Demonstration[]>(
+    readStorage("shadowops_demonstrations", []),
+  );
+  const epoch = useRef(0);
+  const requests = useRef(new Set<AbortController>());
+  const busyReply = useRef(new Set<string>());
+  const engineRef = useRef<OperationsEngine | null>(null);
+  async function apiPost(
+    route: string,
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ) {
+    const controller = new AbortController();
+    requests.current.add(controller);
+    const abort = () => controller.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    try {
+      const res = await fetch(`/api/ai/${route}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, mode: aiModeRef.current }),
+        signal: AbortSignal.any([
+          controller.signal,
+          AbortSignal.timeout(120000),
+        ]),
+      });
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.error || `AI request failed (${res.status})`);
+      return data;
+    } finally {
+      requests.current.delete(controller);
+      signal?.removeEventListener("abort", abort);
+    }
+  }
+  if (!engineRef.current)
+    engineRef.current = new OperationsEngine(operations, {
+      generateReply: (input) => apiPost("generate-reply", input),
+      onChange: (state) => {
+        setOperations(state);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      },
+    });
+  const engine = engineRef.current;
+  const {
+    tickets,
+    customers,
+    payments,
+    policies,
+    approvals,
+    workflows,
+    runs,
+    messages,
+  } = operations;
+  const selectedTicketId = selectedId;
+  const selectedTicket = tickets.find((t) => t.id === selectedId) || null;
+  const selectedCustomer =
+    customers.find((c) => c.id === selectedTicket?.customerId) || null;
+  const selectedPayments = payments.filter(
+    (p) => p.customerId === selectedCustomer?.id,
+  );
+  const activeExecutionRun = runs.find((r) => r.id === activeRunId) || null;
+  const setActiveExecutionRun = (run: WorkflowRun | null) =>
+    setActiveRunId(run?.id || null);
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((current) => (current === msg ? null : current));
-    }, 4000);
+    setTimeout(
+      () => setToastMessage((current) => (current === msg ? null : current)),
+      5000,
+    );
   };
-
-  const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || null;
-  const selectedCustomer = selectedTicket
-    ? customers.find((c) => c.id === selectedTicket.customerId) || null
-    : null;
-  const selectedPayments = selectedCustomer
-    ? payments.filter((p) => p.customerId === selectedCustomer.id)
-    : [];
-
-  const startTeaching = () => {
-    const demoId = 'DEMO_' + Date.now().toString(36);
-    setCurrentDemoId(demoId);
-    setObservationEvents([]);
-    setIsTeaching(true);
-
-    recordActivity({
-      category: 'demonstration',
-      title: 'Demonstration Session Initiated',
-      description: `Teach Mode enabled for ticket #${selectedTicket?.id || 'TICK'} (${selectedTicket?.customerName || 'Customer'}). Recording semantic actions...`,
-      ticketId: selectedTicket?.id,
-      customerName: selectedTicket?.customerName,
-      status: 'info',
-    });
-
-    showToast('Teach Mode activated. Demonstrating operational actions...');
-  };
-
-  const cancelTeaching = () => {
-    setIsTeaching(false);
-    setObservationEvents([]);
-    recordActivity({
-      category: 'demonstration',
-      title: 'Demonstration Session Cancelled',
-      description: 'Teach Mode cancelled by user before saving workflow.',
-      status: 'warning',
-    });
-    showToast('Teach Mode cancelled.');
-  };
-
-  const recordAction = (
-    action: string,
-    entityType: 'customer' | 'payment' | 'policy' | 'approval' | 'ticket',
-    entityId: string,
-    label: string,
-    context: Record<string, any> = {}
+  const recordActivity = (
+    activity: Parameters<AppContextType["recordActivity"]>[0],
   ) => {
-    // Record to persistent activity log
+    const date = new Date();
+    setActivities((prev) => [
+      {
+        id: `ACT_${crypto.randomUUID()}`,
+        timestamp: date.toISOString(),
+        timeFormatted: date.toLocaleTimeString(),
+        ...activity,
+      },
+      ...prev,
+    ]);
+  };
+  const clearActivities = () => setActivities([]);
+  useEffect(() => {
+    localStorage.setItem("shadowops_activities", JSON.stringify(activities));
+  }, [activities]);
+  useEffect(() => {
+    localStorage.setItem("shadowops_schedules", JSON.stringify(schedules));
+  }, [schedules]);
+  useEffect(() => {
+    publish();
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((data) => setAiConfigured(!!data.ai?.configured))
+      .catch(() => {});
+  }, []);
+  const setSelectedTicketId = (id: string | null) => {
+    if (busyReply.current.size > 0) {
+      showToast("Wait for the customer reply before changing tickets.");
+      return;
+    }
+    if (session.current && id !== session.current.ticketId) {
+      showToast("Finish or cancel this demonstration before changing tickets.");
+      return;
+    }
+    setSelectedId(id);
+  };
+  const setAiMode = (mode: "live" | "offline_demo") => {
+    if (
+      busyReply.current.size > 0 ||
+      isTeaching ||
+      isInferring ||
+      runs.some((r) => ["running", "waiting_approval"].includes(r.status))
+    ) {
+      showToast("Finish the current session/run before changing AI mode.");
+      return;
+    }
+    setMode(mode);
+    localStorage.setItem("shadowops_ai_mode", JSON.stringify(mode));
+    setLearningError(null);
+  };
+  const recordAction: AppContextType["recordAction"] = (
+    action,
+    entityType,
+    entityId,
+    label,
+    context = {},
+  ) => {
     recordActivity({
-      category: isTeaching ? 'demonstration' : 'task',
-      title: isTeaching ? `Demonstrated: ${action}` : `Task Performed: ${action}`,
+      category: session.current ? "demonstration" : "task",
+      title: action,
       description: label,
-      ticketId: selectedTicket?.id,
-      customerName: selectedTicket?.customerName,
-      skillId: action,
-      status: isTeaching ? 'info' : 'success',
+      ticketId: session.current?.ticketId || selectedId || undefined,
+      status: "success",
       metadata: context,
     });
-
-    if (!isTeaching) return;
-
+    const demo = session.current;
+    if (!demo) return;
+    if (
+      ![
+        "find_customer",
+        "get_recent_payments",
+        "detect_duplicate_payment",
+        "check_refund_policy",
+        "request_manager_approval",
+        "refund_payment",
+        "draft_customer_reply",
+        "send_customer_reply",
+        "close_ticket",
+      ].includes(action)
+    )
+      return;
     const event: ObservationEvent = {
-      id: 'EVT_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-      demonstrationId: currentDemoId || 'DEMO_MANUAL',
-      sequence: observationEvents.length + 1,
-      timestamp: new Date().toLocaleTimeString(),
-      type: 'tool_action',
+      id: `EVT_${crypto.randomUUID()}`,
+      demonstrationId: demo.id,
+      sequence: demo.events.length + 1,
+      timestamp: new Date().toISOString(),
+      type: "tool_action",
       action,
       entityType,
       entityId,
       label,
-      context,
+      context: { ...context, ticketId: demo.ticketId },
     };
-
-    setObservationEvents((prev) => [...prev, event]);
+    demo.events.push(event);
+    setObservationEvents([...demo.events]);
   };
-
-  const stopTeachingAndLearn = async () => {
-    if (observationEvents.length === 0) {
-      showToast('No actions were recorded in this demonstration.');
-      setIsTeaching(false);
+  const startTeaching = () => {
+    if (
+      busyReply.current.size > 0 ||
+      !selectedTicket ||
+      selectedTicket.status !== "open" ||
+      isInferring ||
+      runs.some((r) => ["running", "waiting_approval"].includes(r.status))
+    ) {
+      showToast("Select an open ticket without an active run before teaching.");
       return;
     }
-
+    session.current = {
+      id: `DEMO_${crypto.randomUUID()}`,
+      ticketId: selectedTicket.id,
+      events: [],
+      startedAt: new Date().toISOString(),
+    };
+    setObservationEvents([]);
+    setIsTeaching(true);
+    setLearningError(null);
+    showToast("Teach Mode active. Complete the ticket, then Stop & Learn.");
+  };
+  const cancelTeaching = () => {
+    session.current = null;
+    setIsTeaching(false);
+    setObservationEvents([]);
+  };
+  const stopTeachingAndLearn = async () => {
+    const demo = session.current;
+    if (!demo || !demo.events.length) {
+      showToast("No demonstration actions recorded.");
+      return;
+    }
+    if (
+      engine.state.tickets.find((t) => t.id === demo.ticketId)?.status !==
+      "resolved"
+    ) {
+      showToast(
+        "Complete refund, customer reply and ticket closure before learning.",
+      );
+      return;
+    }
+    const generation = epoch.current;
     setIsInferring(true);
     setIsTeaching(false);
-
+    setLearningError(null);
+    const ticket = engine.state.tickets.find((t) => t.id === demo.ticketId)!;
+    demo.endedAt = new Date().toISOString();
+    const normalized = demo.events.filter(
+      (e, i, all) =>
+        i === 0 ||
+        e.action !== all[i - 1].action ||
+        e.entityId !== all[i - 1].entityId,
+    );
     try {
-      const activeWf = workflows.find((w) => w.slug === 'duplicate_payment_resolution');
-
-      if (!activeWf) {
-        // Case A: First demonstration -> Induce initial workflow (v1)
-        const response = await fetch('/api/ai/infer-workflow', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ticket: selectedTicket,
-            observationEvents,
-            availableSkills: SKILL_REGISTRY,
-            policies,
-          }),
+      const existing = engine.state.workflows.find(
+        (w) =>
+          w.status === "active" && w.trigger.intent === "duplicate_payment",
+      );
+      if (!existing) {
+        const data = await apiPost("infer-workflow", {
+          ticket,
+          observationEvents: normalized,
         });
-
-        if (!response.ok) throw new Error('Inference API error');
-        const data = await response.json();
-
-        const newWf: WorkflowDefinition = {
-          id: 'WF_' + Date.now(),
-          slug: data.slug || 'duplicate_payment_resolution',
-          name: data.name || 'Duplicate Payment Resolution',
-          version: 1,
-          description: data.description || 'Automated duplicate payment refund workflow',
-          trigger: data.trigger || { type: 'support_ticket', intent: 'duplicate_payment' },
-          inputs: data.inputs || ['ticket_id'],
-          steps: data.steps || [],
-          confidence: data.confidence || 0.92,
-          status: 'active',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          demonstrationsCount: 1,
-          decisionRules: [],
-        };
-
-        setDraftWorkflow(newWf);
+        if (generation !== epoch.current) return;
+        setDraftWorkflow(validateWorkflow(data));
       } else {
-        // Case B: Second demonstration -> Compare with existing and infer conditional rules (v2)
-        const response = await fetch('/api/ai/compare-demonstrations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            existingWorkflow: activeWf,
-            newObservationEvents: observationEvents,
-            ticket: selectedTicket,
-            policies,
-          }),
+        const data = await apiPost("compare-demonstrations", {
+          existingWorkflow: existing,
+          newObservationEvents: normalized,
+          ticket,
+          demonstrations: demonstrations.current
+            .filter((d) => d.workflowId === existing.id)
+            .slice(-10),
         });
-
-        if (!response.ok) throw new Error('Comparison API error');
-        const data = await response.json();
-        setRefinementProposal(data);
+        if (generation !== epoch.current) return;
+        const proposal = ProposalSchema.parse(
+          Object.fromEntries(
+            Object.entries(data).filter(([key]) => key !== "provenance"),
+          ),
+        );
+        if (proposal.classification === "same_workflow") {
+          showToast(
+            "This demonstration matches the existing workflow; no new rule proposed.",
+          );
+        } else if (
+          proposal.classification === "new_workflow" &&
+          proposal.workflow
+        ) {
+          setDraftWorkflow(
+            validateWorkflow({
+              ...proposal.workflow,
+              provenance: data.provenance,
+            }),
+          );
+        } else if (proposal.classification === "workflow_variant") {
+          setRefinementProposal({ ...proposal, provenance: data.provenance });
+        } else
+          throw new Error("Model did not provide a supported workflow update.");
+        demo.workflowId = existing.id;
       }
-    } catch (err) {
-      console.error('Error during AI learning:', err);
-      showToast('Learning engine completed with local fallback.');
+      demonstrations.current.push(structuredClone(demo));
+      localStorage.setItem(
+        "shadowops_demonstrations",
+        JSON.stringify(demonstrations.current),
+      );
+      session.current = null;
+    } catch (error) {
+      if (generation !== epoch.current) return;
+      const msg = error instanceof Error ? error.message : "Learning failed";
+      setLearningError(msg);
+      showToast(msg);
+      setIsTeaching(true);
     } finally {
-      setIsInferring(false);
+      if (generation === epoch.current) setIsInferring(false);
     }
   };
-
-  const saveDraftWorkflow = (wf: WorkflowDefinition) => {
-    setWorkflows((prev) => [wf, ...prev]);
-    setDraftWorkflow(null);
-    recordActivity({
-      category: 'demonstration',
-      title: `Workflow Induced: ${wf.name} (v${wf.version})`,
-      description: `Synthesized ${wf.steps.length}-step executable workflow with ${Math.round(wf.confidence * 100)}% confidence.`,
-      workflowId: wf.id,
-      status: 'success',
-      metadata: { stepsCount: wf.steps.length, version: wf.version },
-    });
-    showToast(`Workflow "${wf.name}" saved as active skill (v${wf.version})!`);
+  function publish() {
+    const snapshot = structuredClone(engine.state);
+    setOperations(snapshot);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  }
+  const saveDraftWorkflow = (input: WorkflowDefinition) => {
+    try {
+      const wf = validateWorkflow({ ...input, status: "active" });
+      engine.state.workflows.unshift(wf);
+      const latest = demonstrations.current.at(-1);
+      if (latest) latest.workflowId = wf.id;
+      localStorage.setItem(
+        "shadowops_demonstrations",
+        JSON.stringify(demonstrations.current),
+      );
+      publish();
+      setDraftWorkflow(null);
+      showToast(`Saved ${wf.name} v${wf.version}.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Invalid workflow");
+    }
   };
-
   const applyRefinement = () => {
     if (!refinementProposal) return;
-
-    setWorkflows((prev) =>
-      prev.map((wf) => {
-        if (wf.slug === 'duplicate_payment_resolution') {
-          // Insert the conditional approval step right after check_refund_policy
-          const newSteps = [...wf.steps];
-          const policyStepIndex = newSteps.findIndex((s) => s.skill === 'check_refund_policy');
-
-          const approvalStep = {
-            id: 'step_approval',
-            skill: 'request_manager_approval',
-            name: 'Request Manager Approval',
-            description: 'Requires approval if refund amount > $500',
-            args: {
-              ticketId: '{{ticket.id}}',
-              amount: '{{duplicate.amount}}',
-              reason: 'Duplicate payment > $500 threshold',
-            },
-            condition: {
-              field: 'duplicate.amount',
-              operator: '>' as const,
-              value: 500,
-              description: 'Amount exceeds $500 threshold',
-            },
-          };
-
-          if (policyStepIndex >= 0) {
-            newSteps.splice(policyStepIndex + 1, 0, approvalStep);
-          } else {
-            newSteps.push(approvalStep);
-          }
-
-          const newRule = {
-            id: 'RULE_' + Date.now(),
-            description: refinementProposal.ruleDescription || 'Refunds > $500 require manager approval',
-            conditionStr: refinementProposal.conditionStr || 'duplicate.amount > 500',
-            confidence: refinementProposal.confidence || 0.94,
-            discoveredAt: new Date().toISOString(),
-          };
-
-          return {
-            ...wf,
-            version: wf.version + 1,
-            steps: newSteps,
-            demonstrationsCount: wf.demonstrationsCount + 1,
-            decisionRules: [...wf.decisionRules, newRule],
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return wf;
-      })
-    );
-
-    recordActivity({
-      category: 'demonstration',
-      title: 'Workflow Refined & Decision Rule Discovered',
-      description: `Cross-demonstration comparison discovered rule: "${refinementProposal.ruleDescription || 'Refunds > $500 require approval'}". Workflow upgraded to v2.`,
-      status: 'warning',
-      metadata: {
-        rule: refinementProposal.ruleDescription,
-        condition: refinementProposal.conditionStr,
-        confidence: refinementProposal.confidence,
-      },
-    });
-
-    setRefinementProposal(null);
-    showToast('Workflow evolved to v2 with newly discovered decision rule!');
-  };
-
-  const issueRefund = async (paymentId: string, ticketId?: string): Promise<string> => {
-    const refundId = 'REF_' + Math.floor(Math.random() * 90000 + 10000);
-
-    setPayments((prev) =>
-      prev.map((p) =>
-        p.id === paymentId
-          ? {
-              ...p,
-              status: 'refunded',
-              refundId,
-              refundedAt: new Date().toISOString(),
-            }
-          : p
-      )
-    );
-
-    if (ticketId) {
-      setTickets((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, status: 'resolved' } : t))
+    try {
+      const proposal = ProposalSchema.parse(
+        Object.fromEntries(
+          Object.entries(refinementProposal).filter(
+            ([key]) => key !== "provenance",
+          ),
+        ),
       );
+      if (
+        !proposal.insertedStep ||
+        !proposal.condition ||
+        proposal.insertedStep.skill !== "request_manager_approval"
+      )
+        throw new Error("Unsupported refinement");
+      const wf = engine.state.workflows.find(
+        (w) => w.id === proposal.workflowId,
+      );
+      if (!wf) throw new Error("Workflow no longer exists");
+      if (wf.steps.some((s) => s.skill === "request_manager_approval"))
+        throw new Error("Approval rule already exists");
+      const steps = [...wf.steps],
+        index = steps.findIndex((s) => s.skill === "check_refund_policy");
+      steps.splice(index + 1, 0, {
+        ...proposal.insertedStep,
+        condition: proposal.condition,
+      });
+      const next = validateWorkflow({
+        ...wf,
+        steps,
+        version: wf.version + 1,
+        demonstrationsCount: wf.demonstrationsCount + 1,
+        updatedAt: new Date().toISOString(),
+        provenance: refinementProposal.provenance,
+        decisionRules: [
+          ...wf.decisionRules,
+          {
+            id: `RULE_${crypto.randomUUID()}`,
+            description:
+              proposal.ruleDescription || proposal.condition.description,
+            conditionStr:
+              proposal.conditionStr ||
+              `${proposal.condition.field} ${proposal.condition.operator} ${proposal.condition.value}`,
+            confidence: proposal.confidence,
+            discoveredAt: new Date().toISOString(),
+          },
+        ],
+      });
+      engine.state.workflows = engine.state.workflows.map((w) =>
+        w.id === wf.id ? next : w,
+      );
+      publish();
+      setRefinementProposal(null);
+      showToast(`Workflow updated to v${next.version}.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Invalid refinement");
     }
-
-    recordActivity({
-      category: 'task',
-      title: `Gateway Refund Issued: ${refundId}`,
-      description: `Processed transaction refund for payment ID ${paymentId}.`,
-      status: 'success',
-      metadata: { paymentId, refundId },
-    });
-
-    return refundId;
   };
-
-  const submitApprovalRequest = (ticketId: string, amount: number, reason: string): string => {
-    const targetTicket = tickets.find((t) => t.id === ticketId);
-    const newApproval: ApprovalRequest = {
-      id: 'APR_' + Date.now().toString(36).toUpperCase(),
-      ticketId,
-      customerName: targetTicket?.customerName || 'Customer',
-      amount,
-      currency: 'USD',
-      reason,
-      status: 'pending',
-      createdAt: new Date().toLocaleTimeString(),
-    };
-
-    setApprovals((prev) => [newApproval, ...prev]);
-    setTickets((prev) =>
-      prev.map((t) => (t.id === ticketId ? { ...t, status: 'pending_approval' } : t))
-    );
-
-    recordActivity({
-      category: 'governance',
-      title: `Manager Approval Requested: ${newApproval.id}`,
-      description: `Dispatched approval request for $${amount} on ticket #${ticketId}. Reason: ${reason}`,
-      ticketId,
-      customerName: targetTicket?.customerName,
-      status: 'warning',
-      metadata: { amount, approvalId: newApproval.id },
-    });
-
-    return newApproval.id;
+  const issueRefund = async (
+    paymentId: string,
+    ticketId?: string,
+  ): Promise<string> => {
+    try {
+      if (session.current && ticketId && ticketId !== session.current.ticketId)
+        throw new Error("Payment belongs to another demonstration ticket");
+      const target = ticketId || session.current?.ticketId;
+      const id = engine.refund(paymentId, target);
+      recordAction(
+        "refund_payment",
+        "payment",
+        paymentId,
+        "Verified duplicate refund issued",
+        { paymentId, refundId: id },
+      );
+      return id;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Refund failed";
+      showToast(msg);
+      throw error;
+    }
   };
-
-  const approveRequest = (approvalId: string) => {
-    const app = approvals.find((a) => a.id === approvalId);
-    if (!app) return;
-
-    setApprovals((prev) =>
-      prev.map((a) =>
-        a.id === approvalId
-          ? {
-              ...a,
-              status: 'approved',
-              approvedBy: 'Ops Manager (Sarah Connor)',
-              approvedAt: new Date().toLocaleTimeString(),
-            }
-          : a
-      )
-    );
-
-    // If ticket was waiting, allow resolution
-    setTickets((prev) =>
-      prev.map((t) => (t.id === app.ticketId ? { ...t, status: 'open' } : t))
-    );
-
-    recordActivity({
-      category: 'governance',
-      title: `Manager Approval Granted: ${approvalId}`,
-      description: `Operations lead authorized refund of $${app.amount} for ticket #${app.ticketId}.`,
-      ticketId: app.ticketId,
-      customerName: app.customerName,
-      status: 'success',
-    });
-
-    showToast(`Approval ${approvalId} granted for $${app.amount}.`);
+  const submitApprovalRequest = (
+    ticketId: string,
+    amount: number,
+    reason: string,
+  ) => {
+    try {
+      const id = engine.requestApproval(ticketId, amount, reason);
+      recordAction(
+        "request_manager_approval",
+        "approval",
+        id,
+        "Manager approval requested",
+        { ticketId, amount, approvalId: id },
+      );
+      return id;
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Approval request failed",
+      );
+      return "";
+    }
   };
-
-  const rejectRequest = (approvalId: string) => {
-    const app = approvals.find((a) => a.id === approvalId);
-    setApprovals((prev) =>
-      prev.map((a) =>
-        a.id === approvalId
-          ? {
-              ...a,
-              status: 'rejected',
-              approvedBy: 'Ops Manager (Sarah Connor)',
-              approvedAt: new Date().toLocaleTimeString(),
-            }
-          : a
-      )
-    );
-
-    recordActivity({
-      category: 'governance',
-      title: `Manager Approval Rejected: ${approvalId}`,
-      description: `Operations lead rejected refund request for ticket #${app?.ticketId || 'TICK'}.`,
-      ticketId: app?.ticketId,
-      status: 'failed',
-    });
-
-    showToast(`Approval ${approvalId} rejected.`);
+  const approveRequest = (id: string) => {
+    void engine
+      .approve(id)
+      .then(() => showToast("Approval granted; any waiting run resumed."))
+      .catch((error) => showToast(error.message));
   };
-
-  const resolveTicket = (ticketId: string) => {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === ticketId ? { ...t, status: 'resolved' } : t))
-    );
-    showToast(`Ticket ${ticketId} resolved.`);
+  const rejectRequest = (id: string) => {
+    try {
+      engine.reject(id);
+      showToast("Approval rejected; refund blocked.");
+    } catch (error) {
+      showToast((error as Error).message);
+    }
   };
-
-  // Autonomous Execution Engine (Case C)
-  const executeWorkflowOnTicket = async (workflowId: string, ticketId: string) => {
-    const wf = workflows.find((w) => w.id === workflowId || w.slug === workflowId);
-    const t = tickets.find((tick) => tick.id === ticketId);
-    if (!wf || !t) return;
-
-    const runId = 'RUN_' + Math.floor(Math.random() * 900 + 100);
-    const initialRunSteps: WorkflowRunStep[] = wf.steps.map((s) => ({
-      id: s.id,
-      skillId: s.skill,
-      name: s.name,
-      status: 'pending',
-      latencyMs: 0,
-    }));
-
-    const newRun: WorkflowRun = {
-      id: runId,
-      workflowId: wf.id,
-      workflowName: wf.name,
-      workflowVersion: wf.version,
-      ticketId: t.id,
-      customerName: t.customerName,
-      status: 'running',
-      startedAt: new Date().toLocaleTimeString(),
-      steps: initialRunSteps,
-    };
-
-    setActiveExecutionRun(newRun);
-
-    recordActivity({
-      category: 'execution',
-      title: `Autonomous Execution Triggered: #${runId}`,
-      description: `Agent executing "${wf.name}" (v${wf.version}) on ticket #${t.id} for ${t.customerName}.`,
-      ticketId: t.id,
-      customerName: t.customerName,
-      runId,
-      workflowId: wf.id,
-      status: 'info',
-    });
-
-    // Step-by-step deterministic autonomous execution with realistic execution latencies
-    let cust = customers.find((c) => c.id === t.customerId);
-    let custPayments = payments.filter((p) => p.customerId === t.customerId);
-    let duplicatePayment: Payment | null = null;
-    let originalPayment: Payment | null = null;
-    let generatedRefundId = '';
-
-    for (let i = 0; i < wf.steps.length; i++) {
-      const stepDef = wf.steps[i];
-      const stepStartTime = performance.now();
-
-      // Update step status to 'running'
-      setActiveExecutionRun((prev) => {
-        if (!prev) return null;
-        const updatedSteps = [...prev.steps];
-        updatedSteps[i] = { ...updatedSteps[i], status: 'running' };
-        return { ...prev, steps: updatedSteps };
-      });
-
-      // Simulated network/processing latency (180ms - 450ms)
-      await new Promise((resolve) => setTimeout(resolve, 380));
-
-      let stepOutput: any = null;
-      let shouldSkip = false;
-      let isFailed = false;
-      let failureReason = '';
-
-      switch (stepDef.skill) {
-        case 'find_customer':
-          stepOutput = {
-            id: cust?.id,
-            name: cust?.name,
-            email: cust?.email,
-            plan: cust?.plan,
-            status: cust?.status,
-          };
-          break;
-
-        case 'get_recent_payments':
-          stepOutput = {
-            totalCount: custPayments.length,
-            records: custPayments.map((p) => ({ id: p.id, amount: p.amount, status: p.status, date: p.chargedAt })),
-          };
-          break;
-
-        case 'detect_duplicate_payment':
-          // Guardrail check: Look for 2 payments with same amount and close timestamp
-          const candidates = custPayments.filter((p) => p.status === 'captured');
-          for (let j = 0; j < candidates.length; j++) {
-            for (let k = j + 1; k < candidates.length; k++) {
-              if (candidates[j].amount === candidates[k].amount) {
-                originalPayment = candidates[j];
-                duplicatePayment = candidates[k];
-                break;
-              }
-            }
-            if (duplicatePayment) break;
-          }
-
-          if (duplicatePayment) {
-            stepOutput = {
-              isDuplicate: true,
-              duplicatePaymentId: duplicatePayment.id,
-              originalPaymentId: originalPayment?.id,
-              amount: duplicatePayment.amount,
-              confidence: 0.98,
-              rationale: 'Identical amount charged within short interval',
-            };
-          } else {
-            // Guardrail triggered (e.g. Case D: Sarah Williams)
-            isFailed = true;
-            failureReason = 'No duplicate payment found. Transactions have differing charges and purposes.';
-            stepOutput = { isDuplicate: false, confidence: 0.99 };
-          }
-          break;
-
-        case 'check_refund_policy':
-          const amount = duplicatePayment?.amount || t.amount || 0;
-          stepOutput = {
-            eligible: true,
-            policy: 'POL_REFUND_01',
-            threshold: 500,
-            amount,
-            requiresApproval: amount > 500,
-          };
-          break;
-
-        case 'request_manager_approval':
-          // Evaluated condition: IF amount > 500
-          const checkAmount = duplicatePayment?.amount || t.amount || 0;
-          if (checkAmount > 500) {
-            // High value -> Requires manager approval
-            const aprId = submitApprovalRequest(t.id, checkAmount, 'High-value duplicate payment');
-            stepOutput = { approvalId: aprId, status: 'pending', amount: checkAmount };
-          } else {
-            // Amount <= 500 -> Rule skipped!
-            shouldSkip = true;
-            stepOutput = { skipped: true, reason: `Amount $${checkAmount} <= $500 threshold` };
-          }
-          break;
-
-        case 'refund_payment':
-          if (duplicatePayment) {
-            generatedRefundId = await issueRefund(duplicatePayment.id);
-            stepOutput = {
-              refundId: generatedRefundId,
-              amount: duplicatePayment.amount,
-              gatewayStatus: 'succeeded',
-            };
-          }
-          break;
-
-        case 'send_customer_reply':
-          stepOutput = {
-            delivered: true,
-            recipient: t.customerEmail,
-            subject: 'Re: ' + t.subject,
-            summary: `Automated confirmation sent for $${duplicatePayment?.amount || t.amount} (Ref: ${generatedRefundId})`,
-          };
-          break;
-
-        case 'close_ticket':
-          resolveTicket(t.id);
-          stepOutput = {
-            ticketId: t.id,
-            status: 'resolved',
-            resolutionCategory: 'duplicate_charge_refunded',
-          };
-          break;
-      }
-
-      const stepLatency = Math.round(performance.now() - stepStartTime);
-
-      setActiveExecutionRun((prev) => {
-        if (!prev) return null;
-        const updatedSteps = [...prev.steps];
-        updatedSteps[i] = {
-          ...updatedSteps[i],
-          status: shouldSkip ? 'skipped' : isFailed ? 'failed' : 'completed',
-          latencyMs: stepLatency,
-          output: stepOutput,
-          error: failureReason || undefined,
-        };
-        return { ...prev, steps: updatedSteps };
-      });
-
-      if (isFailed) {
-        setActiveExecutionRun((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: 'failed',
-                outcomeSummary: `Execution halted safely: ${failureReason}`,
-                completedAt: new Date().toLocaleTimeString(),
-              }
-            : null
+  const resolveTicket = (id: string) => {
+    try {
+      engine.closeTicket(id);
+      recordAction("close_ticket", "ticket", id, "Ticket resolved");
+      showToast("Ticket resolved.");
+    } catch (error) {
+      showToast((error as Error).message);
+    }
+  };
+  const checkRefundPolicy = (paymentId: string, ticketId: string) =>
+    engine.checkPolicy(paymentId, ticketId);
+  const draftAndSendReply = async (ticketId: string) => {
+    if (busyReply.current.has(ticketId))
+      throw new Error("Reply is already being generated");
+    busyReply.current.add(ticketId);
+    const generation = epoch.current;
+    const demonstrationId = session.current?.id;
+    try {
+      const message = await engine.draftAndSendReply(ticketId);
+      if (generation !== epoch.current) return;
+      if (session.current?.id === demonstrationId && selectedId === ticketId) {
+        recordAction(
+          "draft_customer_reply",
+          "ticket",
+          ticketId,
+          "Drafted customer confirmation",
+          { refundId: message.refundId },
         );
-
+        recordAction(
+          "send_customer_reply",
+          "ticket",
+          ticketId,
+          "Saved mock customer reply",
+          { messageId: message.id, refundId: message.refundId },
+        );
+      } else {
         recordActivity({
-          category: 'execution',
-          title: `Autonomous Run Halted Safely: #${runId}`,
-          description: `Guardrail triggered on #${t.id}: ${failureReason}. Execution stopped safely without unauthorized actions.`,
-          ticketId: t.id,
-          customerName: t.customerName,
-          runId,
-          status: 'warning',
+          category: "task",
+          title: "Customer confirmation saved",
+          description: "Mock reply saved after the teaching session ended",
+          ticketId,
+          status: "success",
+          metadata: { refundId: message.refundId, messageId: message.id },
         });
-
-        showToast('Autonomous run stopped safely: No verified duplicate found.');
-        return;
       }
+      showToast("Mock customer confirmation saved.");
+    } catch (error) {
+      if (generation === epoch.current) showToast((error as Error).message);
+      throw error;
+    } finally {
+      busyReply.current.delete(ticketId);
     }
-
-    setActiveExecutionRun((prev) => {
-      if (!prev) return null;
-      const completedRun: WorkflowRun = {
-        ...prev,
-        status: 'completed',
-        completedAt: new Date().toLocaleTimeString(),
-        durationMs: 1420,
-        outcomeSummary: `Ticket resolved. Gateway refund ${generatedRefundId || 'REF_921'} issued, customer notified.`,
-      };
-      setRuns((rList) => [completedRun, ...rList]);
-      return completedRun;
-    });
-
-    recordActivity({
-      category: 'execution',
-      title: `Autonomous Execution Completed: #${runId}`,
-      description: `Workflow "${wf.name}" (v${wf.version}) executed 7/7 steps successfully in 1.4s for ${t.customerName}. Gateway refund ${generatedRefundId || 'REF_921'} issued.`,
-      ticketId: t.id,
-      customerName: t.customerName,
-      runId,
-      status: 'success',
-      metadata: { durationMs: 1420, refundId: generatedRefundId },
-    });
-
-    showToast('Autonomous execution completed successfully!');
   };
-
+  const executeWorkflowOnTicket = async (
+    workflowId: string,
+    ticketId: string,
+  ) => {
+    if (session.current || isInferring) {
+      showToast("Finish teaching before starting a run.");
+      return;
+    }
+    const wf = engine.state.workflows.find(
+      (w) => w.id === workflowId || w.slug === workflowId,
+    );
+    if (!wf || wf.status !== "active") {
+      showToast("No active workflow found.");
+      return;
+    }
+    const generation = epoch.current;
+    try {
+      const pending = engine.startRun(wf, ticketId);
+      const running = engine.state.runs.find(
+        (r) => r.ticketId === ticketId && r.status === "running",
+      );
+      if (running) setActiveRunId(running.id);
+      const run = await pending;
+      if (generation !== epoch.current) return;
+      setActiveRunId(run.id);
+      recordActivity({
+        category: "execution",
+        title: `Run ${run.status}`,
+        description: run.outcomeSummary || "Waiting for manager approval",
+        ticketId,
+        runId: run.id,
+        status:
+          run.status === "completed"
+            ? "success"
+            : run.status === "failed"
+              ? "failed"
+              : "warning",
+      });
+    } catch (error) {
+      showToast((error as Error).message);
+    }
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    setMatchingWorkflow(null);
+    setMatchingError(null);
+    const wf = workflows.filter((w) => w.status === "active");
+    if (
+      busyReply.current.size > 0 ||
+      !selectedTicket ||
+      selectedTicket.status !== "open" ||
+      !wf.length ||
+      isTeaching ||
+      isInferring
+    ) {
+      setIsMatching(false);
+      return;
+    }
+    setIsMatching(true);
+    apiPost(
+      "match-workflow",
+      { ticket: selectedTicket, workflows: wf },
+      controller.signal,
+    )
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        const result = MatchSchema.parse(
+          Object.fromEntries(
+            Object.entries(data).filter(([key]) => key !== "provenance"),
+          ),
+        );
+        setMatchingWorkflow({ ...result, provenance: data.provenance });
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setMatchingError(error.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsMatching(false);
+      });
+    return () => controller.abort();
+  }, [
+    selectedId,
+    selectedTicket?.status,
+    workflows,
+    aiMode,
+    isTeaching,
+    isInferring,
+  ]);
   // Schedule Management
   const addSchedule = (
-    sched: Omit<SkillSchedule, 'id' | 'createdAt' | 'executionCount' | 'successCount' | 'failureCount'>
+    sched: Omit<
+      SkillSchedule,
+      "id" | "createdAt" | "executionCount" | "successCount" | "failureCount"
+    >,
   ) => {
-    const newId = `SCHED_${String(schedules.length + 1).padStart(2, '0')}`;
+    const newId = `SCHED_${String(schedules.length + 1).padStart(2, "0")}`;
     const newSched: SkillSchedule = {
       ...sched,
       id: newId,
@@ -839,37 +685,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setSchedules((prev) => [newSched, ...prev]);
     recordActivity({
-      category: 'governance',
+      category: "governance",
       title: `Cron Trigger Scheduled: ${sched.workflowName}`,
       description: `Defined autonomous cron trigger '${sched.cronExpression}' (${sched.humanReadable}) targeting ${sched.targetScope}.`,
-      status: 'info',
-      metadata: { cron: sched.cronExpression, timezone: sched.timezone, targetScope: sched.targetScope },
+      status: "info",
+      metadata: {
+        cron: sched.cronExpression,
+        timezone: sched.timezone,
+        targetScope: sched.targetScope,
+      },
     });
     showToast(`Schedule '${newSched.humanReadable}' created successfully!`);
   };
 
   const updateSchedule = (id: string, updates: Partial<SkillSchedule>) => {
-    setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
-    showToast('Schedule updated successfully');
+    setSchedules((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+    );
+    showToast("Schedule updated successfully");
   };
 
   const toggleScheduleStatus = (id: string) => {
     setSchedules((prev) =>
       prev.map((s) => {
         if (s.id !== id) return s;
-        const newStatus = s.status === 'active' ? 'paused' : 'active';
+        const newStatus = s.status === "active" ? "paused" : "active";
         recordActivity({
-          category: 'governance',
-          title: `Schedule ${s.id} ${newStatus === 'active' ? 'Resumed' : 'Paused'}`,
+          category: "governance",
+          title: `Schedule ${s.id} ${newStatus === "active" ? "Resumed" : "Paused"}`,
           description: `Cron trigger '${s.cronExpression}' for ${s.workflowName} is now ${newStatus}.`,
-          status: newStatus === 'active' ? 'success' : 'warning',
+          status: newStatus === "active" ? "success" : "warning",
         });
         return {
           ...s,
           status: newStatus,
-          nextRunAt: newStatus === 'active' ? 'Calculated by cron' : 'Paused',
+          nextRunAt: newStatus === "active" ? "Calculated by cron" : "Paused",
         };
-      })
+      }),
     );
   };
 
@@ -878,87 +730,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSchedules((prev) => prev.filter((s) => s.id !== id));
     if (target) {
       recordActivity({
-        category: 'governance',
+        category: "governance",
         title: `Schedule ${id} Deleted`,
         description: `Removed cron schedule '${target.cronExpression}' for ${target.workflowName}.`,
-        status: 'warning',
+        status: "warning",
       });
     }
-    showToast('Schedule deleted');
+    showToast("Schedule deleted");
   };
 
   const triggerScheduleNow = async (id: string) => {
     const target = schedules.find((s) => s.id === id);
-    if (!target) return;
-
-    // Pick a matching ticket if available, e.g. TICK_1044 (Daniel Lee) or first matching
-    const matchingTicket =
-      tickets.find(
-        (t) =>
-          t.status !== 'resolved' &&
-          (target.workflowId === 'duplicate_payment_resolution' ? t.intent === 'duplicate_payment' : true)
-      ) || tickets[0];
-
-    const nowFormatted = new Date().toISOString().replace('T', ' ').substring(0, 19);
-
-    setSchedules((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? {
-              ...s,
-              lastRunAt: nowFormatted,
-              executionCount: s.executionCount + 1,
-              successCount: s.successCount + 1,
-            }
-          : s
-      )
+    const wf = workflows.find(
+      (w) => w.id === target?.workflowId || w.slug === target?.workflowId,
     );
-
-    recordActivity({
-      category: 'execution',
-      title: `Scheduled Autonomous Run: ${target.workflowName}`,
-      description: `Manual dispatch of scheduled cron '${target.cronExpression}' targeting ${matchingTicket ? matchingTicket.customerName : 'system queue'}.`,
-      status: 'success',
-      ticketId: matchingTicket?.id,
-      customerName: matchingTicket?.customerName,
-      workflowId: target.workflowId,
-    });
-
-    if (matchingTicket && target.workflowId === 'duplicate_payment_resolution') {
-      await executeWorkflowOnTicket(target.workflowId, matchingTicket.id);
-    } else {
-      showToast(`Scheduled workflow ${target.workflowName} executed successfully!`);
+    const ticket = tickets.find(
+      (t) => t.status === "open" && t.intent === wf?.trigger.intent,
+    );
+    if (!target || !wf || !ticket) {
+      showToast(
+        "No active workflow and matching open ticket for this schedule.",
+      );
+      return;
     }
+    await executeWorkflowOnTicket(wf.id, ticket.id);
   };
 
   const resetAll = () => {
-    localStorage.removeItem('shadowops_tickets');
-    localStorage.removeItem('shadowops_payments');
-    localStorage.removeItem('shadowops_approvals');
-    localStorage.removeItem('shadowops_workflows');
-    localStorage.removeItem('shadowops_runs');
-    localStorage.removeItem('shadowops_schedules');
-    localStorage.removeItem('shadowops_activities');
-
-    setTickets(INITIAL_TICKETS);
-    setPayments(INITIAL_PAYMENTS);
-    setApprovals(INITIAL_APPROVALS);
-    setWorkflows(INITIAL_WORKFLOWS);
-    setRuns(INITIAL_RUNS);
-    setSchedules(INITIAL_SCHEDULES);
-    setActivities(INITIAL_ACTIVITIES);
-    setSelectedTicketId('TICK_1042');
+    epoch.current++;
+    requests.current.forEach((c) => c.abort());
+    requests.current.clear();
+    session.current = null;
+    demonstrations.current = [];
+    engine.reset();
+    setSelectedId("TICK_1042");
+    setWorkspaceSubTab("inbox");
     setIsTeaching(false);
+    setIsInferring(false);
     setObservationEvents([]);
     setDraftWorkflow(null);
     setRefinementProposal(null);
-    setActiveExecutionRun(null);
-    showToast('Environment successfully reset to pristine initial state.');
+    setActiveRunId(null);
+    setSchedules([]);
+    setActivities([]);
+    setLearningError(null);
+    setMatchingWorkflow(null);
+    setMatchingError(null);
+    busyReply.current.clear();
+    for (const key of Object.keys(localStorage))
+      if (
+        key.startsWith("shadowops_") &&
+        key !== STORAGE_KEY &&
+        key !== "shadowops_ai_mode"
+      )
+        localStorage.removeItem(key);
+    showToast(
+      "Clean demo reset: teach Maria, refine with Alex, then run Daniel.",
+    );
   };
 
   return (
     <AppContext.Provider
       value={{
+        aiMode,
+        setAiMode,
+        aiConfigured,
+        matchingWorkflow,
+        isMatching,
+        matchingError,
+        learningError,
+        messages,
+        draftAndSendReply,
+        checkRefundPolicy,
         activeTab,
         setActiveTab,
         workspaceSubTab,
@@ -1019,7 +862,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 export const useApp = () => {
   const context = useContext(AppContext);
   if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
+    throw new Error("useApp must be used within an AppProvider");
   }
   return context;
 };

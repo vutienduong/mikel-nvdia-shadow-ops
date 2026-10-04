@@ -1,5 +1,5 @@
-import React from 'react';
-import { useApp } from '../../context/AppContext';
+import React from "react";
+import { useApp } from "../../context/AppContext";
 import {
   GitBranch,
   CheckCircle,
@@ -9,7 +9,7 @@ import {
   Sparkles,
   X,
   Plus,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface Props {
   proposal: any;
@@ -18,7 +18,7 @@ interface Props {
 
 export const WorkflowRefineModal: React.FC<Props> = ({ proposal, onClose }) => {
   const { applyRefinement, workflows } = useApp();
-  const currentWorkflow = workflows.find((w) => w.slug === 'duplicate_payment_resolution');
+  const currentWorkflow = workflows.find((w) => w.id === proposal.workflowId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
@@ -35,7 +35,9 @@ export const WorkflowRefineModal: React.FC<Props> = ({ proposal, onClose }) => {
                   New Decision Rule Discovered
                 </span>
                 <span className="text-xs font-mono text-zinc-400">
-                  Confidence: {Math.round((proposal.confidence || 0.94) * 100)}%
+                  {proposal.provenance?.mode === "fixture"
+                    ? "Demo fixture"
+                    : `Confidence: ${Math.round(proposal.confidence * 100)}%`}
                 </span>
               </div>
               <h3 className="text-base font-semibold text-white tracking-tight mt-0.5">
@@ -52,6 +54,11 @@ export const WorkflowRefineModal: React.FC<Props> = ({ proposal, onClose }) => {
           </button>
         </div>
 
+        <p className="px-6 py-2 text-xs text-amber-200 bg-amber-950/20">
+          {proposal.provenance?.mode === "fixture"
+            ? "Offline demo comparison fixture — no AI rule inference."
+            : `Nemotron via Nebius: ${proposal.provenance?.model || "unknown"}`}
+        </p>
         {/* Body */}
         <div className="p-6 space-y-5">
           <div className="bg-amber-950/20 border border-amber-800/50 rounded-xl p-4 space-y-2">
@@ -60,40 +67,47 @@ export const WorkflowRefineModal: React.FC<Props> = ({ proposal, onClose }) => {
               Inferred Conditional Rule
             </div>
             <p className="text-sm font-semibold text-white">
-              "{proposal.ruleDescription || 'Refunds above $500 require manager approval.'}"
+              "{proposal.ruleDescription || proposal.condition?.description}"
             </p>
             <div className="flex items-center gap-2 text-xs font-mono text-amber-300/90 pt-1">
               <span className="px-2 py-0.5 rounded bg-zinc-900 border border-amber-800/40">
-                IF duplicate_amount &gt; $500
+                IF {proposal.condition?.field} {proposal.condition?.operator}{" "}
+                {proposal.condition?.value}
               </span>
               <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
               <span className="px-2 py-0.5 rounded bg-zinc-900 border border-amber-800/40">
-                THEN request_manager_approval
+                THEN {proposal.insertedStep?.skill}
               </span>
             </div>
           </div>
 
           {/* Reasoning Diff */}
           <div className="space-y-2 text-xs">
-            <h5 className="font-medium text-zinc-300">Cross-Demonstration Reasoning:</h5>
+            <h5 className="font-medium text-zinc-300">
+              Cross-Demonstration Reasoning:
+            </h5>
             <p className="text-zinc-400 leading-relaxed bg-zinc-950/60 p-3.5 rounded-lg border border-zinc-800 text-xs">
-              {proposal.reasoning ||
-                'ShadowOps compared Demonstration B (ticket #1043, $1,100) with Demonstration A (ticket #1042, $79). In Demo B, the operator routed the refund through manager authorization prior to execution. Corporate Policy POL_REFUND_01 confirms that refunds <= $500 proceed autonomously, while refunds > $500 require human authorization.'}
+              {proposal.reasoning}
             </p>
           </div>
 
           {/* Target Workflow Update preview */}
           <div className="bg-zinc-950 rounded-lg p-3.5 border border-zinc-800 text-xs flex items-center justify-between">
             <div>
-              <span className="text-zinc-400 block text-[11px]">Workflow Target:</span>
+              <span className="text-zinc-400 block text-[11px]">
+                Workflow Target:
+              </span>
               <span className="font-semibold text-white">
-                {currentWorkflow?.name || 'Duplicate Payment Resolution'}
+                {currentWorkflow?.name || "Duplicate Payment Resolution"}
               </span>
             </div>
             <div className="text-right">
-              <span className="text-zinc-400 block text-[11px]">Target Version:</span>
+              <span className="text-zinc-400 block text-[11px]">
+                Target Version:
+              </span>
               <span className="font-mono text-indigo-400 font-semibold">
-                v{(currentWorkflow?.version || 1)} &rarr; v{(currentWorkflow?.version || 1) + 1}
+                v{currentWorkflow?.version || 1} &rarr; v
+                {(currentWorkflow?.version || 1) + 1}
               </span>
             </div>
           </div>
@@ -118,7 +132,7 @@ export const WorkflowRefineModal: React.FC<Props> = ({ proposal, onClose }) => {
               className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold flex items-center gap-2 shadow-md shadow-amber-600/20 transition-all cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              Add Rule (Upgrade to v2)
+              Add Rule (v{(currentWorkflow?.version || 1) + 1})
             </button>
           </div>
         </div>

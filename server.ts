@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { AIService, AIError } from "./server/ai";
 
-dotenv.config();
+// Local overrides take precedence; exported environment variables still win.
+dotenv.config({ path: [".env.local", ".env"], quiet: true });
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 export function createApp(
   ai = new AIService({

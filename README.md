@@ -37,7 +37,7 @@ Teach Mode locks the demonstration to its ticket. Cancel a teaching session befo
 
 ## Enable NVIDIA Nemotron through Nebius
 
-Copy `.env.example` to the ignored `.env` file. Set server-only `NEBIUS_API_KEY`; never put credentials in a `VITE_` variable. Set `NEBIUS_BASE_URL` to your Nebius Token Factory regional endpoint if needed. Restart the server, select **Nemotron** in the top bar, and reset before demonstrating again.
+Copy `.env.example` to the ignored `.env.local` (or `.env`) file. The server loads `.env.local` before `.env`; exported environment variables take precedence over both. Set server-only `NEBIUS_API_KEY`; never put credentials in a `VITE_` variable. Set `NEBIUS_BASE_URL` to your Nebius Token Factory regional endpoint if needed. Restart the server, select **Nemotron** in the top bar, and reset before demonstrating again.
 
 `NEBIUS_FAST_MODEL` and `NEBIUS_DEEP_MODEL` can contain exact IDs exposed by your account's `/v1/models` catalog. If omitted, the client selects available Nemotron variants, preferring Nano for matching/replies and Ultra for induction/comparison. It rejects unavailable or non-Nemotron configured models. Model names are not assumed to be globally available.
 

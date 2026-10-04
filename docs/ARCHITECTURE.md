@@ -28,7 +28,7 @@ Policy eligibility uses structured USD thresholds and a 48-hour duplicate window
 4. The server stamps workflow metadata and provider/model/mode/request provenance. Client validates again before save/refine.
 5. Accepted proposals use the specified target, condition and step. Whole updated workflow validation happens before publication. Same/new classifications are handled separately. Run definitions preserve execution versions, but a separate workflow version archive is not implemented.
 
-Live output remains untrusted data: it is never executed as JavaScript, shell commands or arbitrary tool names. The configured model must be a catalogued Nemotron variant. Fast/deep model variables are optional; endpoint allowlisting requires HTTPS Nebius Token Factory hosts. Secrets never enter browser variables or result payloads.
+Live output remains untrusted data: it is never executed as JavaScript, shell commands or arbitrary tool names. The configured model must be a catalogued Nemotron variant. Fast/deep model variables are optional; endpoint allowlisting requires HTTPS Nebius Token Factory hosts. The server loads ignored `.env.local` before `.env`, with exported environment variables taking precedence. Secrets never enter browser variables or result payloads.
 
 Reference: [Nebius official Nemotron cookbook](https://github.com/nebius/token-factory-cookbook/tree/main/models/nemotron), which documents the OpenAI-compatible interface and regional model configuration. Exact availability is verified at runtime per account/endpoint, not inferred from this document.
 

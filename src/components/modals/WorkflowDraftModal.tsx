@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import React, { useState } from "react";
+import { useApp } from "../../context/AppContext";
 import {
   BrainCircuit,
   CheckCircle,
@@ -11,8 +11,10 @@ import {
   X,
   Workflow,
   Zap,
-} from 'lucide-react';
-import { WorkflowDefinition } from '../../types';
+} from "lucide-react";
+import { WorkflowDefinition } from "../../types";
+
+import { WorkflowEditor } from "./WorkflowEditor";
 
 interface Props {
   workflow: WorkflowDefinition;
@@ -20,8 +22,9 @@ interface Props {
 }
 
 export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
-  const { saveDraftWorkflow } = useApp();
-  const [viewMode, setViewMode] = useState<'visual' | 'json'>('visual');
+  const { saveDraftWorkflow, setDraftWorkflow } = useApp();
+  const [editing, setEditing] = useState(false);
+  const [viewMode, setViewMode] = useState<"visual" | "json">("visual");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
@@ -38,7 +41,9 @@ export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
                   Workflow Induced
                 </span>
                 <span className="text-xs font-mono text-zinc-400">
-                  Confidence: {Math.round(workflow.confidence * 100)}%
+                  {workflow.provenance?.mode === "fixture"
+                    ? "Demo fixture"
+                    : `Confidence: ${Math.round(workflow.confidence * 100)}%`}
                 </span>
               </div>
               <h3 className="text-base font-semibold text-white tracking-tight mt-0.5">
@@ -55,25 +60,30 @@ export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
           </button>
         </div>
 
+        <p className="px-6 py-2 text-xs text-amber-200 bg-amber-950/20">
+          {workflow.provenance?.mode === "fixture"
+            ? "Offline demo fixture — this workflow was not inferred by AI."
+            : `Nemotron via Nebius: ${workflow.provenance?.model || "unknown"}`}
+        </p>
         {/* View Switcher Tabs */}
         <div className="px-6 py-2.5 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setViewMode('visual')}
+              onClick={() => setViewMode("visual")}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                viewMode === 'visual'
-                  ? 'bg-zinc-800 text-white font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                viewMode === "visual"
+                  ? "bg-zinc-800 text-white font-semibold"
+                  : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
               Execution DAG Plan
             </button>
             <button
-              onClick={() => setViewMode('json')}
+              onClick={() => setViewMode("json")}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                viewMode === 'json'
-                  ? 'bg-zinc-800 text-white font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                viewMode === "json"
+                  ? "bg-zinc-800 text-white font-semibold"
+                  : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
               Workflow Intermediate Representation (IR)
@@ -91,7 +101,7 @@ export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
             {workflow.description}
           </p>
 
-          {viewMode === 'visual' ? (
+          {viewMode === "visual" ? (
             <div className="space-y-2">
               <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">
                 Synthesized Skill Sequence:
@@ -108,18 +118,22 @@ export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
                     </span>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-white">{step.name}</span>
+                        <span className="text-xs font-semibold text-white">
+                          {step.name}
+                        </span>
                         <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-950/60 text-indigo-300 border border-indigo-800/60">
                           {step.skill}
                         </span>
                       </div>
-                      <p className="text-[11px] text-zinc-400 mt-0.5">{step.description}</p>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        {step.description}
+                      </p>
                     </div>
                   </div>
 
                   {step.args && Object.keys(step.args).length > 0 && (
                     <div className="hidden sm:flex flex-col items-end text-[10px] font-mono text-zinc-500">
-                      <span>Args: {Object.keys(step.args).join(', ')}</span>
+                      <span>Args: {Object.keys(step.args).join(", ")}</span>
                     </div>
                   )}
                 </div>
@@ -132,6 +146,13 @@ export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
           )}
         </div>
 
+        {editing && (
+          <WorkflowEditor
+            workflow={workflow}
+            onSave={setDraftWorkflow}
+            onClose={() => setEditing(false)}
+          />
+        )}
         {/* Footer */}
         <div className="p-4 border-t border-zinc-800 bg-zinc-950/80 flex items-center justify-between">
           <div className="text-[11px] text-zinc-500 font-mono">
@@ -139,6 +160,12 @@ export const WorkflowDraftModal: React.FC<Props> = ({ workflow, onClose }) => {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEditing(true)}
+              className="px-3 py-2 text-indigo-300"
+            >
+              Edit draft
+            </button>
             <button
               onClick={onClose}
               className="px-3.5 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"

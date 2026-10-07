@@ -1,0 +1,1262 @@
+{
+  "date": "2026-10-04T20:32:57.149Z",
+  "cases": [
+    {
+      "case": "C",
+      "match": {
+        "workflowId": "WF_42e67e792c724728be1225a0604bdc37",
+        "intent": "duplicate_payment",
+        "confidence": 0.97,
+        "reasoning": "The ticket describes a double charge of $119 within a short timeframe, indicating a duplicate payment. This aligns with the duplicate_payment intent and there is an active duplicate-payment-resolution workflow available.",
+        "provenance": {
+          "provider": "nebius",
+          "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+          "mode": "live",
+          "generatedAt": "2026-10-04T20:33:28.385Z",
+          "requestId": "chatcmpl-db4d6a5f-0fc2-4a0d-9983-cfe9ac478d76"
+        }
+      },
+      "run": {
+        "id": "RUN_85b94f9598204a72959b369e00c17e9b",
+        "workflowId": "WF_42e67e792c724728be1225a0604bdc37",
+        "workflowName": "Duplicate Payment Resolution Workflow",
+        "workflowVersion": 2,
+        "ticketId": "TICK_1044",
+        "customerName": "Daniel Lee",
+        "status": "completed",
+        "startedAt": "2026-10-04T20:33:28.386Z",
+        "steps": [
+          {
+            "id": "step_1",
+            "skillId": "find_customer",
+            "name": "Find customer from ticket",
+            "status": "completed",
+            "latencyMs": 1,
+            "startedAt": "2026-10-04T20:33:28.386Z",
+            "input": {
+              "customerId": "CUS_003"
+            },
+            "output": {
+              "id": "CUS_003",
+              "name": "Daniel Lee",
+              "email": "daniel.lee@synthetix.tech",
+              "plan": "Pro Annual ($119/mo equivalent)",
+              "joinedDate": "2025-08-19",
+              "lifetimeValue": 1428,
+              "status": "active"
+            },
+            "completedAt": "2026-10-04T20:33:28.387Z"
+          },
+          {
+            "id": "step_2",
+            "skillId": "get_recent_payments",
+            "name": "Get recent payments for customer",
+            "status": "completed",
+            "latencyMs": 1,
+            "startedAt": "2026-10-04T20:33:28.387Z",
+            "input": {
+              "customerId": "CUS_003",
+              "limit": 100
+            },
+            "output": [
+              {
+                "id": "PAY_301",
+                "customerId": "CUS_003",
+                "amount": 119,
+                "currency": "USD",
+                "status": "captured",
+                "chargedAt": "2026-10-15 14:02:18 UTC",
+                "plan": "Pro Annual",
+                "description": "Pro Plan Installment #10"
+              },
+              {
+                "id": "PAY_302",
+                "customerId": "CUS_003",
+                "amount": 119,
+                "currency": "USD",
+                "status": "captured",
+                "chargedAt": "2026-10-15 14:03:52 UTC",
+                "plan": "Pro Annual",
+                "description": "Pro Plan Installment #10 (Duplicate)"
+              }
+            ],
+            "completedAt": "2026-10-04T20:33:28.388Z"
+          },
+          {
+            "id": "step_3",
+            "skillId": "detect_duplicate_payment",
+            "name": "Detect duplicate payment within window",
+            "status": "completed",
+            "latencyMs": 1,
+            "startedAt": "2026-10-04T20:33:28.388Z",
+            "input": {
+              "payments": [
+                {
+                  "id": "PAY_301",
+                  "customerId": "CUS_003",
+                  "amount": 119,
+                  "currency": "USD",
+                  "status": "captured",
+                  "chargedAt": "2026-10-15 14:02:18 UTC",
+                  "plan": "Pro Annual",
+                  "description": "Pro Plan Installment #10"
+                },
+                {
+                  "id": "PAY_302",
+                  "customerId": "CUS_003",
+                  "amount": 119,
+                  "currency": "USD",
+                  "status": "captured",
+                  "chargedAt": "2026-10-15 14:03:52 UTC",
+                  "plan": "Pro Annual",
+                  "description": "Pro Plan Installment #10 (Duplicate)"
+                }
+              ],
+              "windowMinutes": 2880
+            },
+            "output": {
+              "payment": {
+                "id": "PAY_302",
+                "customerId": "CUS_003",
+                "amount": 119,
+                "currency": "USD",
+                "status": "captured",
+                "chargedAt": "2026-10-15 14:03:52 UTC",
+                "plan": "Pro Annual",
+                "description": "Pro Plan Installment #10 (Duplicate)"
+              },
+              "original": {
+                "id": "PAY_301",
+                "customerId": "CUS_003",
+                "amount": 119,
+                "currency": "USD",
+                "status": "captured",
+                "chargedAt": "2026-10-15 14:02:18 UTC",
+                "plan": "Pro Annual",
+                "description": "Pro Plan Installment #10"
+              },
+              "amount": 119,
+              "paymentId": "PAY_302"
+            },
+            "completedAt": "2026-10-04T20:33:28.389Z"
+          },
+          {
+            "id": "step_4",
+            "skillId": "check_refund_policy",
+            "name": "Check refund eligibility and approval requirement",
+            "status": "completed",
+            "latencyMs": 1,
+            "startedAt": "2026-10-04T20:33:28.389Z",
+            "input": {
+              "paymentId": "PAY_302",
+              "amount": 119
+            },
+            "output": {
+              "eligible": true,
+              "requiresApproval": false,
+              "threshold": 500,
+              "policyId": "POL_REFUND_01",
+              "amount": 119
+            },
+            "completedAt": "2026-10-04T20:33:28.390Z"
+          },
+          {
+            "id": "step_approval",
+            "skillId": "request_manager_approval",
+            "name": "Request manager approval for high-value duplicate refund",
+            "status": "skipped",
+            "latencyMs": 0,
+            "startedAt": "2026-10-04T20:33:28.390Z",
+            "completedAt": "2026-10-04T20:33:28.390Z",
+            "output": {
+              "skipped": true,
+              "reason": "Duplicate refund amount exceeds the $500 approval threshold per POL_REFUND_01 and POL_AUTH_02"
+            }
+          },
+          {
+            "id": "step_5",
+            "skillId": "refund_payment",
+            "name": "Process refund for duplicate payment",
+            "status": "completed",
+            "latencyMs": 0,
+            "startedAt": "2026-10-04T20:33:28.390Z",
+            "input": {
+              "paymentId": "PAY_302",
+              "reason": "Duplicate charge within 48-hour window per POL_REFUND_01"
+            },
+            "output": {
+              "refundId": "REF_4e517afd536b477e841bf3552b756792",
+              "paymentId": "PAY_302",
+              "amount": 119
+            },
+            "completedAt": "2026-10-04T20:33:28.390Z"
+          },
+          {
+            "id": "step_6",
+            "skillId": "draft_customer_reply",
+            "name": "Draft customer notification with refund details",
+            "status": "completed",
+            "latencyMs": 6430,
+            "startedAt": "2026-10-04T20:33:28.390Z",
+            "input": {
+              "ticketId": "TICK_1044",
+              "customerName": "Daniel Lee",
+              "refundAmount": 119,
+              "refundId": "REF_4e517afd536b477e841bf3552b756792"
+            },
+            "output": {
+              "replyText": "Hi Daniel Lee,\n\nWe’ve processed refund REF_4e517afd536b477e841bf3552b756792 for $119.00. The amount will be credited to your original payment method within 3-5 business days. If you have any further questions, feel free to reach out.\n\nThank you,\nSupport Team",
+              "provenance": {
+                "provider": "nebius",
+                "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+                "mode": "live",
+                "generatedAt": "2026-10-04T20:33:34.820Z",
+                "requestId": "chatcmpl-7349d731-8401-4acf-a645-c0bb78f16ed6"
+              }
+            },
+            "completedAt": "2026-10-04T20:33:34.820Z"
+          },
+          {
+            "id": "step_7",
+            "skillId": "send_customer_reply",
+            "name": "Send refund confirmation to customer",
+            "status": "completed",
+            "latencyMs": 0,
+            "startedAt": "2026-10-04T20:33:34.820Z",
+            "input": {
+              "ticketId": "TICK_1044",
+              "message": "Hi Daniel Lee,\n\nWe’ve processed refund REF_4e517afd536b477e841bf3552b756792 for $119.00. The amount will be credited to your original payment method within 3-5 business days. If you have any further questions, feel free to reach out.\n\nThank you,\nSupport Team"
+            },
+            "output": {
+              "messageId": "MSG_80d0c9b9a1004b54b70b1743292efe1c",
+              "delivered": true
+            },
+            "completedAt": "2026-10-04T20:33:34.820Z"
+          },
+          {
+            "id": "step_8",
+            "skillId": "close_ticket",
+            "name": "Close resolved ticket",
+            "status": "completed",
+            "latencyMs": 1,
+            "startedAt": "2026-10-04T20:33:34.820Z",
+            "input": {
+              "ticketId": "TICK_1044",
+              "resolutionNote": "Duplicate payment refunded successfully"
+            },
+            "output": {
+              "ticketId": "TICK_1044",
+              "status": "resolved"
+            },
+            "completedAt": "2026-10-04T20:33:34.821Z"
+          }
+        ],
+        "definition": {
+          "id": "WF_42e67e792c724728be1225a0604bdc37",
+          "slug": "duplicate-payment-resolution",
+          "name": "Duplicate Payment Resolution Workflow",
+          "version": 2,
+          "description": "Workflow to detect and refund duplicate payments within 48-hour window per policy POL_REFUND_01",
+          "trigger": {
+            "type": "support_ticket",
+            "intent": "duplicate_payment"
+          },
+          "inputs": [
+            "ticket_id"
+          ],
+          "steps": [
+            {
+              "id": "step_1",
+              "skill": "find_customer",
+              "name": "Find customer from ticket",
+              "description": "Retrieve customer details using customerId from ticket",
+              "args": {
+                "customerId": "{{ticket.customerId}}"
+              }
+            },
+            {
+              "id": "step_2",
+              "skill": "get_recent_payments",
+              "name": "Get recent payments for customer",
+              "description": "Fetch recent payment history to identify potential duplicates",
+              "args": {
+                "customerId": "{{customer.id}}",
+                "limit": 100
+              }
+            },
+            {
+              "id": "step_3",
+              "skill": "detect_duplicate_payment",
+              "name": "Detect duplicate payment within window",
+              "description": "Identify duplicate charge within 48-hour window per policy",
+              "args": {
+                "payments": "{{payments}}",
+                "windowMinutes": 2880
+              }
+            },
+            {
+              "id": "step_4",
+              "skill": "check_refund_policy",
+              "name": "Check refund eligibility and approval requirement",
+              "description": "Verify duplicate payment qualifies for refund and check approval threshold",
+              "args": {
+                "paymentId": "{{duplicate.paymentId}}",
+                "amount": "{{duplicate.amount}}"
+              }
+            },
+            {
+              "id": "step_approval",
+              "skill": "request_manager_approval",
+              "name": "Request manager approval for high-value duplicate refund",
+              "description": "Obtain Operations Manager sign-off before processing duplicate refunds exceeding $500 threshold",
+              "args": {
+                "ticketId": "{{ticket.id}}",
+                "amount": "{{duplicate.amount}}",
+                "reason": "Duplicate charge within 48-hour window per POL_REFUND_01 exceeds $500 approval threshold"
+              },
+              "condition": {
+                "field": "duplicate.amount",
+                "operator": ">",
+                "value": 500,
+                "description": "Duplicate refund amount exceeds the $500 approval threshold per POL_REFUND_01 and POL_AUTH_02"
+              }
+            },
+            {
+              "id": "step_5",
+              "skill": "refund_payment",
+              "name": "Process refund for duplicate payment",
+              "description": "Initiate refund for the detected duplicate charge",
+              "args": {
+                "paymentId": "{{duplicate.paymentId}}",
+                "reason": "Duplicate charge within 48-hour window per POL_REFUND_01"
+              }
+            },
+            {
+              "id": "step_6",
+              "skill": "draft_customer_reply",
+              "name": "Draft customer notification with refund details",
+              "description": "Create refund confirmation message with reference ID and processing timeline",
+              "args": {
+                "ticketId": "{{ticket.id}}",
+                "customerName": "{{ticket.customerName}}",
+                "refundAmount": "{{duplicate.amount}}",
+                "refundId": "{{refund.refundId}}"
+              }
+            },
+            {
+              "id": "step_7",
+              "skill": "send_customer_reply",
+              "name": "Send refund confirmation to customer",
+              "description": "Deliver drafted refund notification to customer",
+              "args": {
+                "ticketId": "{{ticket.id}}",
+                "message": "{{reply.replyText}}"
+              }
+            },
+            {
+              "id": "step_8",
+              "skill": "close_ticket",
+              "name": "Close resolved ticket",
+              "description": "Mark ticket as resolved with refund completion note",
+              "args": {
+                "ticketId": "{{ticket.id}}",
+                "resolutionNote": "Duplicate payment refunded successfully"
+              }
+            }
+          ],
+          "confidence": 0.95,
+          "status": "active",
+          "createdAt": "2026-10-04T20:33:13.863Z",
+          "updatedAt": "2026-10-04T20:33:13.863Z",
+          "demonstrationsCount": 1,
+          "decisionRules": [],
+          "provenance": {
+            "provider": "nebius",
+            "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+            "mode": "live",
+            "requestId": "chatcmpl-b88815117716f764",
+            "generatedAt": "2026-10-04T20:33:13.863Z"
+          }
+        },
+        "context": {
+          "ticket": {
+            "id": "TICK_1044",
+            "customerId": "CUS_003",
+            "customerName": "Daniel Lee",
+            "customerEmail": "daniel.lee@synthetix.tech",
+            "subject": "Double billed $119 for monthly installment",
+            "message": "Hey, I checked my bank notification and I see two charges of $119 from ShadowOps today. Looks like an accidental double billing. Can this be resolved?",
+            "intent": "duplicate_payment",
+            "status": "open",
+            "createdAt": "2h ago",
+            "amount": 119,
+            "currency": "USD",
+            "priority": "medium",
+            "tags": [
+              "billing",
+              "duplicate-charge"
+            ]
+          },
+          "step_1": {
+            "id": "CUS_003",
+            "name": "Daniel Lee",
+            "email": "daniel.lee@synthetix.tech",
+            "plan": "Pro Annual ($119/mo equivalent)",
+            "joinedDate": "2025-08-19",
+            "lifetimeValue": 1428,
+            "status": "active"
+          },
+          "customer": {
+            "id": "CUS_003",
+            "name": "Daniel Lee",
+            "email": "daniel.lee@synthetix.tech",
+            "plan": "Pro Annual ($119/mo equivalent)",
+            "joinedDate": "2025-08-19",
+            "lifetimeValue": 1428,
+            "status": "active"
+          },
+          "step_2": [
+            {
+              "id": "PAY_301",
+              "customerId": "CUS_003",
+              "amount": 119,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-15 14:02:18 UTC",
+              "plan": "Pro Annual",
+              "description": "Pro Plan Installment #10"
+            },
+            {
+              "id": "PAY_302",
+              "customerId": "CUS_003",
+              "amount": 119,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-15 14:03:52 UTC",
+              "plan": "Pro Annual",
+              "description": "Pro Plan Installment #10 (Duplicate)"
+            }
+          ],
+          "payments": [
+            {
+              "id": "PAY_301",
+              "customerId": "CUS_003",
+              "amount": 119,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-15 14:02:18 UTC",
+              "plan": "Pro Annual",
+              "description": "Pro Plan Installment #10"
+            },
+            {
+              "id": "PAY_302",
+              "customerId": "CUS_003",
+              "amount": 119,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-15 14:03:52 UTC",
+              "plan": "Pro Annual",
+              "description": "Pro Plan Installment #10 (Duplicate)"
+            }
+          ],
+          "step_3": {
+            "payment": {
+              "id": "PAY_302",
+              "customerId": "CUS_003",
+              "amount": 119,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-15 14:03:52 UTC",
+              "plan": "Pro Annual",
+              "description": "Pro Plan Installment #10 (Duplicate)"
+            },
+            "original": {
+              "id": "PAY_301",
+              "customerId": "CUS_003",
+              "amount": 119,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-15 14:02:18 UTC",
+              "plan": "Pro Annual",
+              "description": "Pro Plan Installment #10"
+            },
+            "amount": 119,
+            "paymentId": "PAY_302"
+          },
+          "duplicate": {
+            "payment": {
+              "id": "PAY_302",
+              "customerId": "CUS_003",
+              "amount": 119,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-15 14:03:52 UTC",
+              "plan": "Pro Annual",
+              "description": "Pro Plan Installment #10 (Duplicate)"
+            },
+            "original": {
+              "id": "PAY_301",
+              "customerId": "CUS_003",
+              "amount": 119,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-15 14:02:18 UTC",
+              "plan": "Pro Annual",
+              "description": "Pro Plan Installment #10"
+            },
+            "amount": 119,
+            "paymentId": "PAY_302"
+          },
+          "step_4": {
+            "eligible": true,
+            "requiresApproval": false,
+            "threshold": 500,
+            "policyId": "POL_REFUND_01",
+            "amount": 119
+          },
+          "policy": {
+            "eligible": true,
+            "requiresApproval": false,
+            "threshold": 500,
+            "policyId": "POL_REFUND_01",
+            "amount": 119
+          },
+          "step_5": {
+            "refundId": "REF_4e517afd536b477e841bf3552b756792",
+            "paymentId": "PAY_302",
+            "amount": 119
+          },
+          "refund": {
+            "refundId": "REF_4e517afd536b477e841bf3552b756792",
+            "paymentId": "PAY_302",
+            "amount": 119
+          },
+          "step_6": {
+            "replyText": "Hi Daniel Lee,\n\nWe’ve processed refund REF_4e517afd536b477e841bf3552b756792 for $119.00. The amount will be credited to your original payment method within 3-5 business days. If you have any further questions, feel free to reach out.\n\nThank you,\nSupport Team",
+            "provenance": {
+              "provider": "nebius",
+              "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+              "mode": "live",
+              "generatedAt": "2026-10-04T20:33:34.820Z",
+              "requestId": "chatcmpl-7349d731-8401-4acf-a645-c0bb78f16ed6"
+            }
+          },
+          "reply": {
+            "replyText": "Hi Daniel Lee,\n\nWe’ve processed refund REF_4e517afd536b477e841bf3552b756792 for $119.00. The amount will be credited to your original payment method within 3-5 business days. If you have any further questions, feel free to reach out.\n\nThank you,\nSupport Team",
+            "provenance": {
+              "provider": "nebius",
+              "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+              "mode": "live",
+              "generatedAt": "2026-10-04T20:33:34.820Z",
+              "requestId": "chatcmpl-7349d731-8401-4acf-a645-c0bb78f16ed6"
+            }
+          },
+          "step_7": {
+            "messageId": "MSG_80d0c9b9a1004b54b70b1743292efe1c",
+            "delivered": true
+          },
+          "message": {
+            "messageId": "MSG_80d0c9b9a1004b54b70b1743292efe1c",
+            "delivered": true
+          },
+          "step_8": {
+            "ticketId": "TICK_1044",
+            "status": "resolved"
+          },
+          "closed": {
+            "ticketId": "TICK_1044",
+            "status": "resolved"
+          }
+        },
+        "nextStep": 9,
+        "completedAt": "2026-10-04T20:33:34.821Z",
+        "durationMs": 6435,
+        "outcomeSummary": "Verified duplicate refunded, customer confirmation saved, ticket resolved"
+      }
+    },
+    {
+      "case": "D",
+      "run": {
+        "id": "RUN_58576bdadcd54a46949f1fd1618aeea5",
+        "workflowId": "WF_42e67e792c724728be1225a0604bdc37",
+        "workflowName": "Duplicate Payment Resolution Workflow",
+        "workflowVersion": 2,
+        "ticketId": "TICK_1045",
+        "customerName": "Sarah Williams",
+        "status": "failed",
+        "startedAt": "2026-10-04T20:33:34.821Z",
+        "steps": [
+          {
+            "id": "step_1",
+            "skillId": "find_customer",
+            "name": "Find customer from ticket",
+            "status": "completed",
+            "latencyMs": 0,
+            "startedAt": "2026-10-04T20:33:34.821Z",
+            "input": {
+              "customerId": "CUS_004"
+            },
+            "output": {
+              "id": "CUS_004",
+              "name": "Sarah Williams",
+              "email": "sarah.w@nordic-ventures.co",
+              "plan": "Business Plus ($99/mo)",
+              "joinedDate": "2025-01-10",
+              "lifetimeValue": 890,
+              "status": "active"
+            },
+            "completedAt": "2026-10-04T20:33:34.821Z"
+          },
+          {
+            "id": "step_2",
+            "skillId": "get_recent_payments",
+            "name": "Get recent payments for customer",
+            "status": "completed",
+            "latencyMs": 0,
+            "startedAt": "2026-10-04T20:33:34.821Z",
+            "input": {
+              "customerId": "CUS_004",
+              "limit": 100
+            },
+            "output": [
+              {
+                "id": "PAY_401",
+                "customerId": "CUS_004",
+                "amount": 99,
+                "currency": "USD",
+                "status": "captured",
+                "chargedAt": "2026-10-01 08:00:00 UTC",
+                "plan": "Business Plus",
+                "description": "Monthly Platform Subscription"
+              },
+              {
+                "id": "PAY_402",
+                "customerId": "CUS_004",
+                "amount": 49,
+                "currency": "USD",
+                "status": "captured",
+                "chargedAt": "2026-10-08 16:32:10 UTC",
+                "plan": "Add-on Pack",
+                "description": "5 Extra Team Seat Licenses"
+              }
+            ],
+            "completedAt": "2026-10-04T20:33:34.821Z"
+          },
+          {
+            "id": "step_3",
+            "skillId": "detect_duplicate_payment",
+            "name": "Detect duplicate payment within window",
+            "status": "failed",
+            "latencyMs": 0,
+            "startedAt": "2026-10-04T20:33:34.821Z",
+            "input": {
+              "payments": [
+                {
+                  "id": "PAY_401",
+                  "customerId": "CUS_004",
+                  "amount": 99,
+                  "currency": "USD",
+                  "status": "captured",
+                  "chargedAt": "2026-10-01 08:00:00 UTC",
+                  "plan": "Business Plus",
+                  "description": "Monthly Platform Subscription"
+                },
+                {
+                  "id": "PAY_402",
+                  "customerId": "CUS_004",
+                  "amount": 49,
+                  "currency": "USD",
+                  "status": "captured",
+                  "chargedAt": "2026-10-08 16:32:10 UTC",
+                  "plan": "Add-on Pack",
+                  "description": "5 Extra Team Seat Licenses"
+                }
+              ],
+              "windowMinutes": 2880
+            },
+            "error": "No verified duplicate payment found",
+            "completedAt": "2026-10-04T20:33:34.821Z"
+          },
+          {
+            "id": "step_4",
+            "skillId": "check_refund_policy",
+            "name": "Check refund eligibility and approval requirement",
+            "status": "pending",
+            "latencyMs": 0
+          },
+          {
+            "id": "step_approval",
+            "skillId": "request_manager_approval",
+            "name": "Request manager approval for high-value duplicate refund",
+            "status": "pending",
+            "latencyMs": 0
+          },
+          {
+            "id": "step_5",
+            "skillId": "refund_payment",
+            "name": "Process refund for duplicate payment",
+            "status": "pending",
+            "latencyMs": 0
+          },
+          {
+            "id": "step_6",
+            "skillId": "draft_customer_reply",
+            "name": "Draft customer notification with refund details",
+            "status": "pending",
+            "latencyMs": 0
+          },
+          {
+            "id": "step_7",
+            "skillId": "send_customer_reply",
+            "name": "Send refund confirmation to customer",
+            "status": "pending",
+            "latencyMs": 0
+          },
+          {
+            "id": "step_8",
+            "skillId": "close_ticket",
+            "name": "Close resolved ticket",
+            "status": "pending",
+            "latencyMs": 0
+          }
+        ],
+        "definition": {
+          "id": "WF_42e67e792c724728be1225a0604bdc37",
+          "slug": "duplicate-payment-resolution",
+          "name": "Duplicate Payment Resolution Workflow",
+          "version": 2,
+          "description": "Workflow to detect and refund duplicate payments within 48-hour window per policy POL_REFUND_01",
+          "trigger": {
+            "type": "support_ticket",
+            "intent": "duplicate_payment"
+          },
+          "inputs": [
+            "ticket_id"
+          ],
+          "steps": [
+            {
+              "id": "step_1",
+              "skill": "find_customer",
+              "name": "Find customer from ticket",
+              "description": "Retrieve customer details using customerId from ticket",
+              "args": {
+                "customerId": "{{ticket.customerId}}"
+              }
+            },
+            {
+              "id": "step_2",
+              "skill": "get_recent_payments",
+              "name": "Get recent payments for customer",
+              "description": "Fetch recent payment history to identify potential duplicates",
+              "args": {
+                "customerId": "{{customer.id}}",
+                "limit": 100
+              }
+            },
+            {
+              "id": "step_3",
+              "skill": "detect_duplicate_payment",
+              "name": "Detect duplicate payment within window",
+              "description": "Identify duplicate charge within 48-hour window per policy",
+              "args": {
+                "payments": "{{payments}}",
+                "windowMinutes": 2880
+              }
+            },
+            {
+              "id": "step_4",
+              "skill": "check_refund_policy",
+              "name": "Check refund eligibility and approval requirement",
+              "description": "Verify duplicate payment qualifies for refund and check approval threshold",
+              "args": {
+                "paymentId": "{{duplicate.paymentId}}",
+                "amount": "{{duplicate.amount}}"
+              }
+            },
+            {
+              "id": "step_approval",
+              "skill": "request_manager_approval",
+              "name": "Request manager approval for high-value duplicate refund",
+              "description": "Obtain Operations Manager sign-off before processing duplicate refunds exceeding $500 threshold",
+              "args": {
+                "ticketId": "{{ticket.id}}",
+                "amount": "{{duplicate.amount}}",
+                "reason": "Duplicate charge within 48-hour window per POL_REFUND_01 exceeds $500 approval threshold"
+              },
+              "condition": {
+                "field": "duplicate.amount",
+                "operator": ">",
+                "value": 500,
+                "description": "Duplicate refund amount exceeds the $500 approval threshold per POL_REFUND_01 and POL_AUTH_02"
+              }
+            },
+            {
+              "id": "step_5",
+              "skill": "refund_payment",
+              "name": "Process refund for duplicate payment",
+              "description": "Initiate refund for the detected duplicate charge",
+              "args": {
+                "paymentId": "{{duplicate.paymentId}}",
+                "reason": "Duplicate charge within 48-hour window per POL_REFUND_01"
+              }
+            },
+            {
+              "id": "step_6",
+              "skill": "draft_customer_reply",
+              "name": "Draft customer notification with refund details",
+              "description": "Create refund confirmation message with reference ID and processing timeline",
+              "args": {
+                "ticketId": "{{ticket.id}}",
+                "customerName": "{{ticket.customerName}}",
+                "refundAmount": "{{duplicate.amount}}",
+                "refundId": "{{refund.refundId}}"
+              }
+            },
+            {
+              "id": "step_7",
+              "skill": "send_customer_reply",
+              "name": "Send refund confirmation to customer",
+              "description": "Deliver drafted refund notification to customer",
+              "args": {
+                "ticketId": "{{ticket.id}}",
+                "message": "{{reply.replyText}}"
+              }
+            },
+            {
+              "id": "step_8",
+              "skill": "close_ticket",
+              "name": "Close resolved ticket",
+              "description": "Mark ticket as resolved with refund completion note",
+              "args": {
+                "ticketId": "{{ticket.id}}",
+                "resolutionNote": "Duplicate payment refunded successfully"
+              }
+            }
+          ],
+          "confidence": 0.95,
+          "status": "active",
+          "createdAt": "2026-10-04T20:33:13.863Z",
+          "updatedAt": "2026-10-04T20:33:13.863Z",
+          "demonstrationsCount": 1,
+          "decisionRules": [],
+          "provenance": {
+            "provider": "nebius",
+            "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+            "mode": "live",
+            "requestId": "chatcmpl-b88815117716f764",
+            "generatedAt": "2026-10-04T20:33:13.863Z"
+          }
+        },
+        "context": {
+          "ticket": {
+            "id": "TICK_1045",
+            "customerId": "CUS_004",
+            "customerName": "Sarah Williams",
+            "customerEmail": "sarah.w@nordic-ventures.co",
+            "subject": "Why was I billed twice this month?",
+            "message": "Hi, I see two charges from you guys this month ($99 and $49). I thought my subscription was only once a month? Can you refund the extra charge?",
+            "intent": "duplicate_payment",
+            "status": "open",
+            "createdAt": "3h ago",
+            "amount": 99,
+            "currency": "USD",
+            "priority": "low",
+            "tags": [
+              "inquiry",
+              "charge-verification"
+            ]
+          },
+          "step_1": {
+            "id": "CUS_004",
+            "name": "Sarah Williams",
+            "email": "sarah.w@nordic-ventures.co",
+            "plan": "Business Plus ($99/mo)",
+            "joinedDate": "2025-01-10",
+            "lifetimeValue": 890,
+            "status": "active"
+          },
+          "customer": {
+            "id": "CUS_004",
+            "name": "Sarah Williams",
+            "email": "sarah.w@nordic-ventures.co",
+            "plan": "Business Plus ($99/mo)",
+            "joinedDate": "2025-01-10",
+            "lifetimeValue": 890,
+            "status": "active"
+          },
+          "step_2": [
+            {
+              "id": "PAY_401",
+              "customerId": "CUS_004",
+              "amount": 99,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-01 08:00:00 UTC",
+              "plan": "Business Plus",
+              "description": "Monthly Platform Subscription"
+            },
+            {
+              "id": "PAY_402",
+              "customerId": "CUS_004",
+              "amount": 49,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-08 16:32:10 UTC",
+              "plan": "Add-on Pack",
+              "description": "5 Extra Team Seat Licenses"
+            }
+          ],
+          "payments": [
+            {
+              "id": "PAY_401",
+              "customerId": "CUS_004",
+              "amount": 99,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-01 08:00:00 UTC",
+              "plan": "Business Plus",
+              "description": "Monthly Platform Subscription"
+            },
+            {
+              "id": "PAY_402",
+              "customerId": "CUS_004",
+              "amount": 49,
+              "currency": "USD",
+              "status": "captured",
+              "chargedAt": "2026-10-08 16:32:10 UTC",
+              "plan": "Add-on Pack",
+              "description": "5 Extra Team Seat Licenses"
+            }
+          ]
+        },
+        "nextStep": 2,
+        "completedAt": "2026-10-04T20:33:34.821Z",
+        "durationMs": 0,
+        "outcomeSummary": "No verified duplicate payment found"
+      }
+    }
+  ],
+  "v1": {
+    "id": "WF_42e67e792c724728be1225a0604bdc37",
+    "slug": "duplicate-payment-resolution",
+    "name": "Duplicate Payment Resolution Workflow",
+    "version": 1,
+    "description": "Workflow to detect and refund duplicate payments within 48-hour window per policy POL_REFUND_01",
+    "trigger": {
+      "type": "support_ticket",
+      "intent": "duplicate_payment"
+    },
+    "inputs": [
+      "ticket_id"
+    ],
+    "steps": [
+      {
+        "id": "step_1",
+        "skill": "find_customer",
+        "name": "Find customer from ticket",
+        "description": "Retrieve customer details using customerId from ticket",
+        "args": {
+          "customerId": "{{ticket.customerId}}"
+        }
+      },
+      {
+        "id": "step_2",
+        "skill": "get_recent_payments",
+        "name": "Get recent payments for customer",
+        "description": "Fetch recent payment history to identify potential duplicates",
+        "args": {
+          "customerId": "{{customer.id}}",
+          "limit": 100
+        }
+      },
+      {
+        "id": "step_3",
+        "skill": "detect_duplicate_payment",
+        "name": "Detect duplicate payment within window",
+        "description": "Identify duplicate charge within 48-hour window per policy",
+        "args": {
+          "payments": "{{payments}}",
+          "windowMinutes": 2880
+        }
+      },
+      {
+        "id": "step_4",
+        "skill": "check_refund_policy",
+        "name": "Check refund eligibility and approval requirement",
+        "description": "Verify duplicate payment qualifies for refund and check approval threshold",
+        "args": {
+          "paymentId": "{{duplicate.paymentId}}",
+          "amount": "{{duplicate.amount}}"
+        }
+      },
+      {
+        "id": "step_5",
+        "skill": "refund_payment",
+        "name": "Process refund for duplicate payment",
+        "description": "Initiate refund for the detected duplicate charge",
+        "args": {
+          "paymentId": "{{duplicate.paymentId}}",
+          "reason": "Duplicate charge within 48-hour window per POL_REFUND_01"
+        }
+      },
+      {
+        "id": "step_6",
+        "skill": "draft_customer_reply",
+        "name": "Draft customer notification with refund details",
+        "description": "Create refund confirmation message with reference ID and processing timeline",
+        "args": {
+          "ticketId": "{{ticket.id}}",
+          "customerName": "{{ticket.customerName}}",
+          "refundAmount": "{{duplicate.amount}}",
+          "refundId": "{{refund.refundId}}"
+        }
+      },
+      {
+        "id": "step_7",
+        "skill": "send_customer_reply",
+        "name": "Send refund confirmation to customer",
+        "description": "Deliver drafted refund notification to customer",
+        "args": {
+          "ticketId": "{{ticket.id}}",
+          "message": "{{reply.replyText}}"
+        }
+      },
+      {
+        "id": "step_8",
+        "skill": "close_ticket",
+        "name": "Close resolved ticket",
+        "description": "Mark ticket as resolved with refund completion note",
+        "args": {
+          "ticketId": "{{ticket.id}}",
+          "resolutionNote": "Duplicate payment refunded successfully"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "status": "active",
+    "createdAt": "2026-10-04T20:33:13.863Z",
+    "updatedAt": "2026-10-04T20:33:13.863Z",
+    "demonstrationsCount": 1,
+    "decisionRules": [],
+    "provenance": {
+      "provider": "nebius",
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "mode": "live",
+      "requestId": "chatcmpl-b88815117716f764",
+      "generatedAt": "2026-10-04T20:33:13.863Z"
+    }
+  },
+  "proposal": {
+    "classification": "workflow_variant",
+    "workflowId": "WF_42e67e792c724728be1225a0604bdc37",
+    "confidence": 0.98,
+    "reasoning": "The new demonstration (DEMO_TICK_1043) follows the same core sequence as the existing workflow but inserts a mandatory manager approval step after check_refund_policy because the duplicate amount ($1,100) exceeds the $500 threshold defined in POL_REFUND_01 and POL_AUTH_02. The existing workflow lacks this conditional approval branch and proceeds directly to refund_payment. The policy explicitly requires Operations Manager sign-off for duplicate refunds > $500, which is observed in the new trace via the request_manager_approval tool action.",
+    "ruleDescription": "When a duplicate payment amount exceeds $500, a manager approval step must be inserted between policy check and refund execution.",
+    "conditionStr": "duplicate.amount > 500",
+    "condition": {
+      "field": "duplicate.amount",
+      "operator": ">",
+      "value": 500,
+      "description": "Duplicate refund amount exceeds the $500 approval threshold per POL_REFUND_01 and POL_AUTH_02"
+    },
+    "insertedStep": {
+      "id": "step_approval",
+      "skill": "request_manager_approval",
+      "name": "Request manager approval for high-value duplicate refund",
+      "description": "Obtain Operations Manager sign-off before processing duplicate refunds exceeding $500 threshold",
+      "args": {
+        "ticketId": "{{ticket.id}}",
+        "amount": "{{duplicate.amount}}",
+        "reason": "Duplicate charge within 48-hour window per POL_REFUND_01 exceeds $500 approval threshold"
+      },
+      "condition": {
+        "field": "duplicate.amount",
+        "operator": ">",
+        "value": 500,
+        "description": "Duplicate refund amount exceeds the $500 approval threshold per POL_REFUND_01 and POL_AUTH_02"
+      }
+    },
+    "provenance": {
+      "provider": "nebius",
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "mode": "live",
+      "generatedAt": "2026-10-04T20:33:23.371Z",
+      "requestId": "chatcmpl-9212bd45e0426057"
+    }
+  },
+  "v2": {
+    "id": "WF_42e67e792c724728be1225a0604bdc37",
+    "slug": "duplicate-payment-resolution",
+    "name": "Duplicate Payment Resolution Workflow",
+    "version": 2,
+    "description": "Workflow to detect and refund duplicate payments within 48-hour window per policy POL_REFUND_01",
+    "trigger": {
+      "type": "support_ticket",
+      "intent": "duplicate_payment"
+    },
+    "inputs": [
+      "ticket_id"
+    ],
+    "steps": [
+      {
+        "id": "step_1",
+        "skill": "find_customer",
+        "name": "Find customer from ticket",
+        "description": "Retrieve customer details using customerId from ticket",
+        "args": {
+          "customerId": "{{ticket.customerId}}"
+        }
+      },
+      {
+        "id": "step_2",
+        "skill": "get_recent_payments",
+        "name": "Get recent payments for customer",
+        "description": "Fetch recent payment history to identify potential duplicates",
+        "args": {
+          "customerId": "{{customer.id}}",
+          "limit": 100
+        }
+      },
+      {
+        "id": "step_3",
+        "skill": "detect_duplicate_payment",
+        "name": "Detect duplicate payment within window",
+        "description": "Identify duplicate charge within 48-hour window per policy",
+        "args": {
+          "payments": "{{payments}}",
+          "windowMinutes": 2880
+        }
+      },
+      {
+        "id": "step_4",
+        "skill": "check_refund_policy",
+        "name": "Check refund eligibility and approval requirement",
+        "description": "Verify duplicate payment qualifies for refund and check approval threshold",
+        "args": {
+          "paymentId": "{{duplicate.paymentId}}",
+          "amount": "{{duplicate.amount}}"
+        }
+      },
+      {
+        "id": "step_approval",
+        "skill": "request_manager_approval",
+        "name": "Request manager approval for high-value duplicate refund",
+        "description": "Obtain Operations Manager sign-off before processing duplicate refunds exceeding $500 threshold",
+        "args": {
+          "ticketId": "{{ticket.id}}",
+          "amount": "{{duplicate.amount}}",
+          "reason": "Duplicate charge within 48-hour window per POL_REFUND_01 exceeds $500 approval threshold"
+        },
+        "condition": {
+          "field": "duplicate.amount",
+          "operator": ">",
+          "value": 500,
+          "description": "Duplicate refund amount exceeds the $500 approval threshold per POL_REFUND_01 and POL_AUTH_02"
+        }
+      },
+      {
+        "id": "step_5",
+        "skill": "refund_payment",
+        "name": "Process refund for duplicate payment",
+        "description": "Initiate refund for the detected duplicate charge",
+        "args": {
+          "paymentId": "{{duplicate.paymentId}}",
+          "reason": "Duplicate charge within 48-hour window per POL_REFUND_01"
+        }
+      },
+      {
+        "id": "step_6",
+        "skill": "draft_customer_reply",
+        "name": "Draft customer notification with refund details",
+        "description": "Create refund confirmation message with reference ID and processing timeline",
+        "args": {
+          "ticketId": "{{ticket.id}}",
+          "customerName": "{{ticket.customerName}}",
+          "refundAmount": "{{duplicate.amount}}",
+          "refundId": "{{refund.refundId}}"
+        }
+      },
+      {
+        "id": "step_7",
+        "skill": "send_customer_reply",
+        "name": "Send refund confirmation to customer",
+        "description": "Deliver drafted refund notification to customer",
+        "args": {
+          "ticketId": "{{ticket.id}}",
+          "message": "{{reply.replyText}}"
+        }
+      },
+      {
+        "id": "step_8",
+        "skill": "close_ticket",
+        "name": "Close resolved ticket",
+        "description": "Mark ticket as resolved with refund completion note",
+        "args": {
+          "ticketId": "{{ticket.id}}",
+          "resolutionNote": "Duplicate payment refunded successfully"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "status": "active",
+    "createdAt": "2026-10-04T20:33:13.863Z",
+    "updatedAt": "2026-10-04T20:33:13.863Z",
+    "demonstrationsCount": 1,
+    "decisionRules": [],
+    "provenance": {
+      "provider": "nebius",
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "mode": "live",
+      "requestId": "chatcmpl-b88815117716f764",
+      "generatedAt": "2026-10-04T20:33:13.863Z"
+    }
+  },
+  "messages": [
+    {
+      "id": "MSG_43d074fa323c4dc49a4079248a893a62",
+      "ticketId": "TICK_1042",
+      "paymentId": "PAY_103",
+      "refundId": "REF_532e2e7d4a024650ab6ae1a8d9aab4aa",
+      "text": "Hi Maria Chen, we’ve issued a refund of $79 (Reference ID: REF_532e2e7d4a024650ab6ae1a8d9aab4aa). The amount will be credited to your original payment method within 3-5 business days. Thank you for your patience!",
+      "sentAt": "2026-10-04T20:33:06.736Z",
+      "provenance": {
+        "provider": "nebius",
+        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "mode": "live",
+        "generatedAt": "2026-10-04T20:33:06.735Z",
+        "requestId": "chatcmpl-8fd569f4-b623-429b-a17f-206d5dd28fc0"
+      }
+    },
+    {
+      "id": "MSG_2b0ce87633854e629c6216826fe1761a",
+      "ticketId": "TICK_1043",
+      "paymentId": "PAY_202",
+      "refundId": "REF_5067fb1e70ab49ddb6e85280987035bd",
+      "text": "Hi Alex Morgan,\n\nWe’ve processed a refund of $1,100 (Refund ID: REF_5067fb1e70ab49ddb6e85280987035bd). The amount will be credited back to your original payment method within the next 3‑5 business days.\n\nThank you for your patience, and please let us know if there’s anything else we can help with.\n\nBest regards,\nThe Support Team",
+      "sentAt": "2026-10-04T20:33:19.630Z",
+      "provenance": {
+        "provider": "nebius",
+        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "mode": "live",
+        "generatedAt": "2026-10-04T20:33:19.630Z",
+        "requestId": "chatcmpl-6f8a40fa-f8c2-42d6-970b-5eab99a3f7f8"
+      }
+    },
+    {
+      "id": "MSG_80d0c9b9a1004b54b70b1743292efe1c",
+      "ticketId": "TICK_1044",
+      "paymentId": "PAY_302",
+      "refundId": "REF_4e517afd536b477e841bf3552b756792",
+      "text": "Hi Daniel Lee,\n\nWe’ve processed refund REF_4e517afd536b477e841bf3552b756792 for $119.00. The amount will be credited to your original payment method within 3-5 business days. If you have any further questions, feel free to reach out.\n\nThank you,\nSupport Team",
+      "sentAt": "2026-10-04T20:33:34.820Z",
+      "provenance": {
+        "provider": "nebius",
+        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "mode": "live",
+        "generatedAt": "2026-10-04T20:33:34.820Z",
+        "requestId": "chatcmpl-7349d731-8401-4acf-a645-c0bb78f16ed6"
+      }
+    }
+  ],
+  "status": "passed"
+}

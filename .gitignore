@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+.playwright-mcp/
+output/playwright/
+.vercel/
+.playwright-cli/
+output/shadowops-source.tar.gz
+output/video-tools/

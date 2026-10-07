@@ -1,0 +1,94 @@
+{
+  "verifiedAt": "2026-10-04T21:00:35.481Z",
+  "scope": "Local production build, live Nemotron, mock business effects",
+  "daniel": {
+    "status": "completed",
+    "retryCount": 1,
+    "workflowVersion": 2,
+    "refundTrace": [
+      {
+        "id": "step_5",
+        "skillId": "refund_payment",
+        "name": "Process Refund",
+        "status": "completed",
+        "latencyMs": 3,
+        "startedAt": "2026-10-04T20:51:39.019Z",
+        "input": {
+          "paymentId": "PAY_302",
+          "reason": "Duplicate payment"
+        },
+        "output": {
+          "refundId": "REF_2ccbad7e8c5f4770b61f5864d004e6b2",
+          "paymentId": "PAY_302",
+          "amount": 119
+        },
+        "completedAt": "2026-10-04T20:51:39.022Z"
+      }
+    ],
+    "payment": {
+      "id": "PAY_302",
+      "customerId": "CUS_003",
+      "amount": 119,
+      "currency": "USD",
+      "status": "refunded",
+      "chargedAt": "2026-10-15 14:03:52 UTC",
+      "plan": "Pro Annual",
+      "description": "Pro Plan Installment #10 (Duplicate)",
+      "refundId": "REF_2ccbad7e8c5f4770b61f5864d004e6b2",
+      "refundedAt": "2026-10-04T20:51:39.020Z",
+      "refundTicketId": "TICK_1044"
+    },
+    "messages": [
+      {
+        "id": "MSG_e7cc138ed8734aa587adc6d985c0e109",
+        "ticketId": "TICK_1044",
+        "paymentId": "PAY_302",
+        "refundId": "REF_2ccbad7e8c5f4770b61f5864d004e6b2",
+        "text": "Hi Daniel Lee, we\u2019ve processed refund REF_2ccbad7e8c5f4770b61f5864d004e6b2 for $119. The funds will be credited to your account within 3\u20115 business days. Thank you for your patience!",
+        "sentAt": "2026-10-04T20:55:40.750Z",
+        "provenance": {
+          "provider": "nebius",
+          "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+          "mode": "live",
+          "generatedAt": "2026-10-04T20:55:40.745Z",
+          "requestId": "chatcmpl-d83f9a8a-f53a-40cc-ae5f-d474357cdfca"
+        }
+      }
+    ]
+  },
+  "sarah": {
+    "status": "failed",
+    "reviewRequired": true,
+    "outcome": "No verified duplicate payment found",
+    "payments": [
+      {
+        "id": "PAY_401",
+        "customerId": "CUS_004",
+        "amount": 99,
+        "currency": "USD",
+        "status": "captured",
+        "chargedAt": "2026-10-01 08:00:00 UTC",
+        "plan": "Business Plus",
+        "description": "Monthly Platform Subscription"
+      },
+      {
+        "id": "PAY_402",
+        "customerId": "CUS_004",
+        "amount": 49,
+        "currency": "USD",
+        "status": "captured",
+        "chargedAt": "2026-10-08 16:32:10 UTC",
+        "plan": "Add-on Pack",
+        "description": "5 Extra Team Seat Licenses"
+      }
+    ]
+  },
+  "versions": [
+    {
+      "version": 1,
+      "sourceDemonstrationIds": [
+        "DEMO_a9523640-952c-45bc-974a-bc3b9329c333"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import React, { useState, useEffect } from "react";
+import { useApp } from "../../context/AppContext";
+import { findDuplicate, paymentTime } from "../../domain/operations";
 import {
   User,
   CreditCard,
@@ -17,7 +18,7 @@ import {
   DollarSign,
   AlertTriangle,
   RotateCcw,
-} from 'lucide-react';
+} from "lucide-react";
 
 export const TicketWorkspace: React.FC = () => {
   const {
@@ -33,18 +34,40 @@ export const TicketWorkspace: React.FC = () => {
     submitApprovalRequest,
     resolveTicket,
     showToast,
+    messages,
+    draftAndSendReply,
+    checkRefundPolicy,
   } = useApp();
 
   const ticket = tickets.find((t) => t.id === selectedTicketId);
-  const customer = ticket ? customers.find((c) => c.id === ticket.customerId) : null;
-  const customerPayments = customer ? payments.filter((p) => p.customerId === customer.id) : [];
-  const relevantPolicy = policies.find((p) => p.id === 'POL_REFUND_01') || policies[0];
+  const customer = ticket
+    ? customers.find((c) => c.id === ticket.customerId)
+    : null;
+  const customerPayments = customer
+    ? payments.filter((p) => p.customerId === customer.id)
+    : [];
+  const relevantPolicy =
+    policies.find((p) => p.id === "POL_REFUND_01") || policies[0];
 
-  const [activeTab, setActiveTab] = useState<'details' | 'payments' | 'policy'>('details');
-  const [replyMessage, setReplyMessage] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<"details" | "payments" | "policy">(
+    "details",
+  );
+  const replyMessage =
+    messages.find((m) => m.ticketId === selectedTicketId)?.text || "";
+  const replySource = messages.find(
+    (m) => m.ticketId === selectedTicketId,
+  )?.provenance;
   const [isDrafting, setIsDrafting] = useState<boolean>(false);
   const [verifiedDuplicate, setVerifiedDuplicate] = useState<boolean>(false);
-  const [duplicatePaymentId, setDuplicatePaymentId] = useState<string | null>(null);
+  const [duplicatePaymentId, setDuplicatePaymentId] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    setVerifiedDuplicate(false);
+    setDuplicatePaymentId(null);
+    setActiveTab("details");
+  }, [selectedTicketId]);
 
   if (!ticket) {
     return (
@@ -54,173 +77,142 @@ export const TicketWorkspace: React.FC = () => {
     );
   }
 
-  // Find candidate duplicate payment (two charges with same amount)
-  const candidateDuplicate = (() => {
-    for (let i = 0; i < customerPayments.length; i++) {
-      for (let j = i + 1; j < customerPayments.length; j++) {
-        if (
-          customerPayments[i].amount === customerPayments[j].amount &&
-          customerPayments[i].status === 'captured' &&
-          customerPayments[j].status === 'captured'
-        ) {
-          return customerPayments[j]; // The second charge
-        }
-      }
+  const duplicate = (() => {
+    try {
+      return findDuplicate(customerPayments);
+    } catch {
+      return null;
     }
-    return null;
   })();
+  const candidateDuplicate = duplicate?.payment || null;
 
   // Handlers for Semantic Operations (also emits ObservationEvent when isTeaching)
   const handleFindCustomer = () => {
     if (!customer) return;
     recordAction(
-      'find_customer',
-      'customer',
+      "find_customer",
+      "customer",
       customer.id,
       `Located customer profile: ${customer.name} (${customer.plan})`,
-      { customerId: customer.id, email: customer.email, plan: customer.plan }
+      { customerId: customer.id, email: customer.email, plan: customer.plan },
     );
     showToast(`Customer account ${customer.name} inspected.`);
   };
 
   const handleGetRecentPayments = () => {
     if (!customer) return;
-    setActiveTab('payments');
+    setActiveTab("payments");
     recordAction(
-      'get_recent_payments',
-      'payment',
+      "get_recent_payments",
+      "payment",
       customer.id,
       `Retrieved ${customerPayments.length} billing transaction records`,
-      { customerId: customer.id, count: customerPayments.length }
+      { customerId: customer.id, count: customerPayments.length },
     );
-    showToast(`Loaded ${customerPayments.length} billing records for ${customer.name}.`);
+    showToast(
+      `Loaded ${customerPayments.length} billing records for ${customer.name}.`,
+    );
   };
 
   const handleDetectDuplicate = () => {
     if (candidateDuplicate) {
       setVerifiedDuplicate(true);
       setDuplicatePaymentId(candidateDuplicate.id);
-      setActiveTab('payments');
+      setActiveTab("payments");
       recordAction(
-        'detect_duplicate_payment',
-        'payment',
+        "detect_duplicate_payment",
+        "payment",
         candidateDuplicate.id,
         `Verified duplicate payment of $${candidateDuplicate.amount} (${candidateDuplicate.id})`,
         {
           duplicatePaymentId: candidateDuplicate.id,
           amount: candidateDuplicate.amount,
-          intervalMinutes: 1,
-        }
+          intervalMinutes: duplicate
+            ? Math.round(
+                (paymentTime(duplicate.payment.chargedAt) -
+                  paymentTime(duplicate.original.chargedAt)) /
+                  60000,
+              )
+            : 0,
+        },
       );
-      showToast(`Duplicate payment confirmed: $${candidateDuplicate.amount} on ${candidateDuplicate.id}`);
+      showToast(
+        `Duplicate payment confirmed: $${candidateDuplicate.amount} on ${candidateDuplicate.id}`,
+      );
     } else {
       // Non-duplicate scenario (e.g. Sarah Williams)
       setVerifiedDuplicate(false);
       recordAction(
-        'detect_duplicate_payment',
-        'payment',
+        "detect_duplicate_payment",
+        "payment",
         ticket.id,
-        'Analyzed transactions: No identical charges found within billing interval',
-        { isDuplicate: false, chargesChecked: customerPayments.length }
+        "Analyzed transactions: No identical charges found within billing interval",
+        { isDuplicate: false, chargesChecked: customerPayments.length },
       );
-      showToast('Guardrail: No matching duplicate charges detected.');
+      showToast("Guardrail: No matching duplicate charges detected.");
     }
   };
 
   const handleCheckPolicy = () => {
-    setActiveTab('policy');
-    const amount = candidateDuplicate?.amount || ticket.amount || 0;
-    const reqApproval = amount > (relevantPolicy.thresholdAmount || 500);
-
-    recordAction(
-      'check_refund_policy',
-      'policy',
-      relevantPolicy.id,
-      `Checked ${relevantPolicy.title}: Eligible within 48h window (Approval required: ${reqApproval ? 'YES (> $500)' : 'NO (<= $500)'})`,
-      {
-        policyId: relevantPolicy.id,
-        amount,
-        threshold: relevantPolicy.thresholdAmount,
-        requiresApproval: reqApproval,
-      }
-    );
-    showToast(`Checked Policy ${relevantPolicy.id}: ${reqApproval ? 'Requires Manager Approval' : 'Eligible for direct refund'}`);
-  };
-
-  const handleRequestApproval = () => {
-    const amount = candidateDuplicate?.amount || ticket.amount || 0;
-    const aprId = submitApprovalRequest(ticket.id, amount, 'High-value duplicate payment > $500');
-
-    recordAction(
-      'request_manager_approval',
-      'approval',
-      aprId,
-      `Dispatched manager approval request for $${amount} (${aprId})`,
-      { ticketId: ticket.id, amount, approvalId: aprId }
-    );
-    showToast(`Approval request ${aprId} sent to Operations Manager queue.`);
-  };
-
-  const handleRefundPayment = async () => {
-    const targetPayment = candidateDuplicate || customerPayments.find((p) => p.status === 'captured');
-    if (!targetPayment) {
-      showToast('No captured payment found to refund.');
+    setActiveTab("policy");
+    if (!candidateDuplicate) {
+      showToast(
+        "No verified duplicate; refund eligibility cannot be established.",
+      );
       return;
     }
-
-    const refundId = await issueRefund(targetPayment.id);
-    recordAction(
-      'refund_payment',
-      'payment',
-      targetPayment.id,
-      `Executed gateway refund of $${targetPayment.amount} (Ref: ${refundId})`,
-      { paymentId: targetPayment.id, refundId, amount: targetPayment.amount }
-    );
-    showToast(`Refund ${refundId} issued for $${targetPayment.amount}.`);
+    try {
+      const result = checkRefundPolicy(candidateDuplicate.id, ticket.id);
+      recordAction(
+        "check_refund_policy",
+        "policy",
+        result.policyId,
+        `Verified policy eligibility; approval ${result.requiresApproval ? "required" : "not required"}`,
+        result,
+      );
+      showToast(
+        result.requiresApproval
+          ? "Manager approval is required before refund."
+          : "Verified duplicate is eligible for refund.",
+      );
+    } catch (error) {
+      showToast((error as Error).message);
+    }
   };
-
+  const handleRequestApproval = () => {
+    if (!candidateDuplicate) {
+      showToast("Verify a duplicate before requesting approval.");
+      return;
+    }
+    submitApprovalRequest(
+      ticket.id,
+      candidateDuplicate.amount,
+      "Verified high-value duplicate payment",
+    );
+  };
+  const handleRefundPayment = async () => {
+    if (!candidateDuplicate) {
+      showToast("No verified duplicate payment to refund.");
+      return;
+    }
+    try {
+      const refundId = await issueRefund(candidateDuplicate.id, ticket.id);
+      showToast(`Refund ${refundId} issued.`);
+    } catch {
+      /* Context displays the failed guard. */
+    }
+  };
   const handleDraftAndSendReply = async () => {
     setIsDrafting(true);
     try {
-      const res = await fetch('/api/ai/generate-reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerName: customer?.name || ticket.customerName,
-          refundAmount: candidateDuplicate?.amount || ticket.amount || 79,
-          refundId: 'REF_' + Math.floor(Math.random() * 90000 + 10000),
-          ticketSubject: ticket.subject,
-        }),
-      });
-
-      const data = await res.json();
-      setReplyMessage(data.replyText || '');
-
-      recordAction(
-        'send_customer_reply',
-        'ticket',
-        ticket.id,
-        `Dispatched customer confirmation email to ${ticket.customerEmail}`,
-        { ticketId: ticket.id, recipient: ticket.customerEmail }
-      );
-      showToast(`Reply sent to ${ticket.customerEmail}`);
-    } catch (e) {
-      showToast('Generated reply sent.');
+      await draftAndSendReply(ticket.id);
+    } catch {
+      /* Context displays provider or receipt error. */
     } finally {
       setIsDrafting(false);
     }
   };
-
-  const handleCloseTicket = () => {
-    resolveTicket(ticket.id);
-    recordAction(
-      'close_ticket',
-      'ticket',
-      ticket.id,
-      `Resolved ticket ${ticket.id} with resolution category 'duplicate_charge_refunded'`,
-      { ticketId: ticket.id, status: 'resolved' }
-    );
-  };
+  const handleCloseTicket = () => resolveTicket(ticket.id);
 
   const ticketApproval = approvals.find((a) => a.ticketId === ticket.id);
 
@@ -235,25 +227,25 @@ export const TicketWorkspace: React.FC = () => {
             </span>
             <span
               className={`text-xs px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1 ${
-                ticket.status === 'resolved'
-                  ? 'bg-emerald-950/70 border border-emerald-800 text-emerald-300'
-                  : ticket.status === 'pending_approval'
-                  ? 'bg-amber-950/70 border border-amber-800 text-amber-300'
-                  : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                ticket.status === "resolved"
+                  ? "bg-emerald-950/70 border border-emerald-800 text-emerald-300"
+                  : ticket.status === "pending_approval"
+                    ? "bg-amber-950/70 border border-amber-800 text-amber-300"
+                    : "bg-zinc-800 text-zinc-300 border border-zinc-700"
               }`}
             >
-              {ticket.status === 'resolved' ? (
+              {ticket.status === "resolved" ? (
                 <>
                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                   Resolved
                 </>
-              ) : ticket.status === 'pending_approval' ? (
+              ) : ticket.status === "pending_approval" ? (
                 <>
                   <Clock className="w-3 h-3 text-amber-400" />
                   Waiting for Manager Approval
                 </>
               ) : (
-                'Open'
+                "Open"
               )}
             </span>
             <span className="text-xs text-zinc-500">{ticket.createdAt}</span>
@@ -262,12 +254,16 @@ export const TicketWorkspace: React.FC = () => {
           {ticket.amount && (
             <div className="flex items-center gap-1.5 font-mono text-xs bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-md text-zinc-200">
               <span className="text-zinc-500">Flagged Amount:</span>
-              <span className="font-semibold text-white">${ticket.amount} {ticket.currency || 'USD'}</span>
+              <span className="font-semibold text-white">
+                ${ticket.amount} {ticket.currency || "USD"}
+              </span>
             </div>
           )}
         </div>
 
-        <h2 className="text-lg font-semibold text-white tracking-tight">{ticket.subject}</h2>
+        <h2 className="text-lg font-semibold text-white tracking-tight">
+          {ticket.subject}
+        </h2>
 
         {/* Customer Quick Summary */}
         {customer && (
@@ -275,7 +271,9 @@ export const TicketWorkspace: React.FC = () => {
             <div className="flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-zinc-500" />
               <span className="font-medium text-zinc-200">{customer.name}</span>
-              <span className="text-zinc-500 font-mono">({customer.email})</span>
+              <span className="text-zinc-500 font-mono">
+                ({customer.email})
+              </span>
             </div>
             <span>•</span>
             <div className="flex items-center gap-1.5">
@@ -284,7 +282,10 @@ export const TicketWorkspace: React.FC = () => {
             </div>
             <span>•</span>
             <div>
-              Lifetime Value: <span className="font-mono text-zinc-300 font-medium">${customer.lifetimeValue}</span>
+              Lifetime Value:{" "}
+              <span className="font-mono text-zinc-300 font-medium">
+                ${customer.lifetimeValue}
+              </span>
             </div>
           </div>
         )}
@@ -330,7 +331,8 @@ export const TicketWorkspace: React.FC = () => {
         </button>
 
         {/* Manager Approval Button (Recommended when amount > 500) */}
-        {(ticket.amount && ticket.amount > 500) || (candidateDuplicate && candidateDuplicate.amount > 500) ? (
+        {(ticket.amount && ticket.amount > 500) ||
+        (candidateDuplicate && candidateDuplicate.amount > 500) ? (
           <button
             onClick={handleRequestApproval}
             className="px-2.5 py-1 rounded bg-amber-950/80 hover:bg-amber-900 border border-amber-700 text-amber-200 text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -354,10 +356,10 @@ export const TicketWorkspace: React.FC = () => {
           className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700/80 flex items-center gap-1.5 cursor-pointer transition-colors"
         >
           <Send className="w-3 h-3 text-indigo-400" />
-          {isDrafting ? 'Drafting...' : 'Send Resolution Email'}
+          {isDrafting ? "Drafting..." : "Send Customer Reply"}
         </button>
 
-        {ticket.status !== 'resolved' && (
+        {ticket.status !== "resolved" && (
           <button
             onClick={handleCloseTicket}
             className="ml-auto px-2.5 py-1 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 text-xs font-medium border border-emerald-700/80 flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -384,21 +386,21 @@ export const TicketWorkspace: React.FC = () => {
         {/* Tab Controls for Detailed Inspection */}
         <div className="border-b border-zinc-800 flex items-center gap-6">
           <button
-            onClick={() => setActiveTab('details')}
+            onClick={() => setActiveTab("details")}
             className={`pb-2.5 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
-              activeTab === 'details'
-                ? 'border-indigo-500 text-white font-semibold'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+              activeTab === "details"
+                ? "border-indigo-500 text-white font-semibold"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
             Customer Overview
           </button>
           <button
-            onClick={() => setActiveTab('payments')}
+            onClick={() => setActiveTab("payments")}
             className={`pb-2.5 text-xs font-medium border-b-2 transition-colors cursor-pointer flex items-center gap-2 ${
-              activeTab === 'payments'
-                ? 'border-indigo-500 text-white font-semibold'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+              activeTab === "payments"
+                ? "border-indigo-500 text-white font-semibold"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
             Payment Transactions ({customerPayments.length})
@@ -407,11 +409,11 @@ export const TicketWorkspace: React.FC = () => {
             )}
           </button>
           <button
-            onClick={() => setActiveTab('policy')}
+            onClick={() => setActiveTab("policy")}
             className={`pb-2.5 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
-              activeTab === 'policy'
-                ? 'border-indigo-500 text-white font-semibold'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+              activeTab === "policy"
+                ? "border-indigo-500 text-white font-semibold"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
             Applicable Refund Policy
@@ -419,10 +421,12 @@ export const TicketWorkspace: React.FC = () => {
         </div>
 
         {/* Tab 1: Customer Details */}
-        {activeTab === 'details' && customer && (
+        {activeTab === "details" && customer && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-3">
-              <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Account Credentials</h4>
+              <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+                Account Credentials
+              </h4>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between py-1 border-b border-zinc-800/60">
                   <span className="text-zinc-400">Account ID:</span>
@@ -444,11 +448,15 @@ export const TicketWorkspace: React.FC = () => {
             </div>
 
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 space-y-3">
-              <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Subscription & Status</h4>
+              <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+                Subscription & Status
+              </h4>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between py-1 border-b border-zinc-800/60">
                   <span className="text-zinc-400">Active Tier:</span>
-                  <span className="font-semibold text-indigo-400">{customer.plan}</span>
+                  <span className="font-semibold text-indigo-400">
+                    {customer.plan}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-zinc-800/60">
                   <span className="text-zinc-400">Account Health:</span>
@@ -458,7 +466,9 @@ export const TicketWorkspace: React.FC = () => {
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-zinc-400">Cumulative Revenue:</span>
-                  <span className="font-mono font-medium text-white">${customer.lifetimeValue}.00 USD</span>
+                  <span className="font-mono font-medium text-white">
+                    ${customer.lifetimeValue}.00 USD
+                  </span>
                 </div>
               </div>
             </div>
@@ -466,7 +476,7 @@ export const TicketWorkspace: React.FC = () => {
         )}
 
         {/* Tab 2: Payments Ledger */}
-        {activeTab === 'payments' && (
+        {activeTab === "payments" && (
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
             <div className="p-3.5 bg-zinc-950/60 border-b border-zinc-800 flex items-center justify-between">
               <span className="text-xs font-semibold text-zinc-200">
@@ -491,14 +501,16 @@ export const TicketWorkspace: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
                   {customerPayments.map((p) => {
-                    const isDup = p.id === duplicatePaymentId || (candidateDuplicate && candidateDuplicate.id === p.id);
+                    const isDup =
+                      p.id === duplicatePaymentId ||
+                      (candidateDuplicate && candidateDuplicate.id === p.id);
                     return (
                       <tr
                         key={p.id}
                         className={`transition-colors ${
                           isDup
-                            ? 'bg-amber-950/30 border-l-2 border-amber-500'
-                            : 'hover:bg-zinc-900/60'
+                            ? "bg-amber-950/30 border-l-2 border-amber-500"
+                            : "hover:bg-zinc-900/60"
                         }`}
                       >
                         <td className="py-3 px-4 font-mono text-zinc-300 font-medium">
@@ -512,14 +524,18 @@ export const TicketWorkspace: React.FC = () => {
                         <td className="py-3 px-4 font-mono font-semibold text-white">
                           ${p.amount}.00 {p.currency}
                         </td>
-                        <td className="py-3 px-4 text-zinc-400">{p.description}</td>
-                        <td className="py-3 px-4 font-mono text-zinc-400 text-[11px]">{p.chargedAt}</td>
+                        <td className="py-3 px-4 text-zinc-400">
+                          {p.description}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-zinc-400 text-[11px]">
+                          {p.chargedAt}
+                        </td>
                         <td className="py-3 px-4">
                           <span
                             className={`inline-block px-2 py-0.5 rounded text-[10px] font-mono uppercase ${
-                              p.status === 'refunded'
-                                ? 'bg-purple-950/70 text-purple-300 border border-purple-800'
-                                : 'bg-emerald-950/70 text-emerald-300 border border-emerald-800'
+                              p.status === "refunded"
+                                ? "bg-purple-950/70 text-purple-300 border border-purple-800"
+                                : "bg-emerald-950/70 text-emerald-300 border border-emerald-800"
                             }`}
                           >
                             {p.status}
@@ -527,17 +543,14 @@ export const TicketWorkspace: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          {p.status === 'captured' && (
+                          {p.status === "captured" && (
                             <button
                               onClick={async () => {
-                                await issueRefund(p.id, ticket.id);
-                                recordAction(
-                                  'refund_payment',
-                                  'payment',
-                                  p.id,
-                                  `Refunded transaction ${p.id} ($${p.amount})`,
-                                  { paymentId: p.id, amount: p.amount }
-                                );
+                                try {
+                                  await issueRefund(p.id, ticket.id);
+                                } catch {
+                                  /* Guard error is visible in toast. */
+                                }
                               }}
                               className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer"
                             >
@@ -555,16 +568,25 @@ export const TicketWorkspace: React.FC = () => {
         )}
 
         {/* Tab 3: Policy Documentation */}
-        {activeTab === 'policy' && (
+        {activeTab === "policy" && (
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div>
-                <h4 className="text-sm font-semibold text-white">{relevantPolicy.title}</h4>
-                <p className="text-xs text-zinc-400">Category: {relevantPolicy.category} • Version: {relevantPolicy.version}</p>
+                <h4 className="text-sm font-semibold text-white">
+                  {relevantPolicy.title}
+                </h4>
+                <p className="text-xs text-zinc-400">
+                  Category: {relevantPolicy.category} • Version:{" "}
+                  {relevantPolicy.version}
+                </p>
               </div>
               <div className="text-right">
-                <span className="text-[11px] font-mono text-zinc-400">Manager Sign-off Threshold:</span>
-                <p className="font-mono text-xs font-semibold text-amber-400">&gt; ${relevantPolicy.thresholdAmount}.00 USD</p>
+                <span className="text-[11px] font-mono text-zinc-400">
+                  Manager Sign-off Threshold:
+                </span>
+                <p className="font-mono text-xs font-semibold text-amber-400">
+                  &gt; ${relevantPolicy.thresholdAmount}.00 USD
+                </p>
               </div>
             </div>
 
@@ -584,12 +606,14 @@ export const TicketWorkspace: React.FC = () => {
                   Manager Approval Request: {ticketApproval.id}
                 </h5>
                 <p className="text-xs text-amber-300/80">
-                  Amount: ${ticketApproval.amount} • Reason: {ticketApproval.reason} • Status: <strong className="uppercase">{ticketApproval.status}</strong>
+                  Amount: ${ticketApproval.amount} • Reason:{" "}
+                  {ticketApproval.reason} • Status:{" "}
+                  <strong className="uppercase">{ticketApproval.status}</strong>
                 </p>
               </div>
             </div>
 
-            {ticketApproval.status === 'pending' && (
+            {ticketApproval.status === "pending" && (
               <span className="text-xs font-mono px-2.5 py-1 rounded bg-amber-900/60 text-amber-300 border border-amber-700">
                 Awaiting Operations Lead
               </span>
@@ -603,10 +627,17 @@ export const TicketWorkspace: React.FC = () => {
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Sent Resolution Email
+                Mock Customer Confirmation
               </span>
-              <span className="text-zinc-500 font-mono text-[10px]">Delivered to {ticket.customerEmail}</span>
+              <span className="text-zinc-500 font-mono text-[10px]">
+                Saved for {ticket.customerEmail}
+              </span>
             </div>
+            <p className="text-[11px] text-amber-300">
+              {replySource?.mode === "fixture"
+                ? "Offline demo fixture — no model inference"
+                : `Nemotron on Nebius: ${replySource?.model || "unknown"}`}
+            </p>
             <pre className="text-xs text-zinc-300 font-sans whitespace-pre-wrap bg-zinc-950 p-3.5 rounded-lg border border-zinc-800">
               {replyMessage}
             </pre>

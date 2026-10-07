@@ -1,5 +1,5 @@
-import React from 'react';
-import { useApp } from '../../context/AppContext';
+import React from "react";
+import { useApp } from "../../context/AppContext";
 import {
   BrainCircuit,
   Radio,
@@ -11,7 +11,7 @@ import {
   CheckCircle2,
   BarChart3,
   CalendarClock,
-} from 'lucide-react';
+} from "lucide-react";
 
 export const Navbar: React.FC = () => {
   const {
@@ -25,10 +25,18 @@ export const Navbar: React.FC = () => {
     schedules,
     resetAll,
     observationEvents,
+    aiMode,
+    setAiMode,
+    aiConfigured,
+    isInferring,
   } = useApp();
 
-  const activeSkillsCount = workflows.filter((w) => w.status === 'active').length;
-  const activeSchedulesCount = schedules.filter((s) => s.status === 'active').length;
+  const activeSkillsCount = workflows.filter(
+    (w) => w.status === "active",
+  ).length;
+  const activeSchedulesCount = schedules.filter(
+    (s) => s.status === "active",
+  ).length;
   const latestWf = workflows[0];
 
   return (
@@ -37,7 +45,7 @@ export const Navbar: React.FC = () => {
         {/* Brand */}
         <div className="flex items-center gap-6">
           <div
-            onClick={() => setActiveTab('workspace')}
+            onClick={() => setActiveTab("workspace")}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
@@ -45,23 +53,27 @@ export const Navbar: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-base tracking-tight text-white">ShadowOps</span>
+                <span className="font-semibold text-base tracking-tight text-white">
+                  ShadowOps
+                </span>
                 <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
                   Enterprise
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 font-normal">Turn human work into reusable AI skills</p>
+              <p className="text-[11px] text-zinc-400 font-normal">
+                Turn human work into reusable AI skills
+              </p>
             </div>
           </div>
 
           {/* Navigation Links */}
           <nav className="hidden md:flex items-center gap-1 border-l border-zinc-800 pl-6">
             <button
-              onClick={() => setActiveTab('workspace')}
+              onClick={() => setActiveTab("workspace")}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                activeTab === 'workspace'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                activeTab === "workspace"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
@@ -69,11 +81,11 @@ export const Navbar: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('skills')}
+              onClick={() => setActiveTab("skills")}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                activeTab === 'skills'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                activeTab === "skills"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
@@ -86,11 +98,11 @@ export const Navbar: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('runs')}
+              onClick={() => setActiveTab("runs")}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                activeTab === 'runs'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                activeTab === "runs"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
               }`}
             >
               <History className="w-3.5 h-3.5" />
@@ -103,11 +115,11 @@ export const Navbar: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('analytics')}
+              onClick={() => setActiveTab("analytics")}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                activeTab === 'analytics'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                activeTab === "analytics"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
@@ -115,11 +127,11 @@ export const Navbar: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('schedules')}
+              onClick={() => setActiveTab("schedules")}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                activeTab === 'schedules'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                activeTab === "schedules"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
               }`}
             >
               <CalendarClock className="w-3.5 h-3.5" />
@@ -135,11 +147,27 @@ export const Navbar: React.FC = () => {
 
         {/* Right Side: Global Teach Mode & System Controls */}
         <div className="flex items-center gap-3">
+          <select
+            aria-label="AI mode"
+            value={aiMode}
+            onChange={(event) =>
+              setAiMode(event.target.value as "live" | "offline_demo")
+            }
+            disabled={isTeaching || isInferring}
+            className="max-w-48 bg-zinc-900 text-xs text-amber-200 border border-zinc-700 rounded px-2 py-1.5"
+          >
+            <option value="live">
+              Nemotron {aiConfigured ? "(configured)" : "(setup required)"}
+            </option>
+            <option value="offline_demo">Offline demo — fixtures</option>
+          </select>
           {/* Active Skill Indicator */}
           {latestWf && (
             <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 text-xs">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-mono text-[11px]">{latestWf.name} (v{latestWf.version})</span>
+              <span className="font-mono text-[11px]">
+                {latestWf.name} (v{latestWf.version})
+              </span>
             </div>
           )}
 
@@ -151,7 +179,9 @@ export const Navbar: React.FC = () => {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
                 </span>
-                <span className="text-xs font-semibold text-red-200 tracking-wide uppercase">Teaching</span>
+                <span className="text-xs font-semibold text-red-200 tracking-wide uppercase">
+                  Teaching
+                </span>
                 <span className="text-[11px] font-mono bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded border border-red-800/50">
                   {observationEvents.length} events
                 </span>

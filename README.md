@@ -2,6 +2,21 @@
 
 Turn human work into reusable AI skills. A controlled customer-support workspace demonstrates semantic teaching, workflow review, conditional refinement and deterministic execution with bounded mock refunds.
 
+## NVIDIA Nemotron and Nebius usage
+
+ShadowOps uses NVIDIA Nemotron through **Nebius Token Factory** to turn demonstrated support actions into reusable workflows. The models recorded in our live acceptance runs are:
+
+| Model | Role in ShadowOps |
+| --- | --- |
+| `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Ticket intent/workflow matching and customer refund reply drafting. |
+| `nvidia/Nemotron-3-Ultra-550b-a55b` | Workflow induction from semantic action traces and comparison of demonstrations to propose conditional manager-approval rules. |
+
+This task routing uses Nano for narrower tasks and Ultra for deeper workflow reasoning. We use prompt engineering, not fine-tuning: registered skill schemas, demonstration traces, policy context, low-temperature generation and JSON output instructions. Humans review learned workflows; runtime validators and deterministic handlers enforce execution and refund policy independently of model output. The integration lives in [server/ai.ts](server/ai.ts).
+
+**Where Token Factory accelerated development:** managed inference let us integrate both variants through one OpenAI-compatible API without downloading model weights or provisioning GPU servers. Our local Express backend discovers available models through `/v1/models` and calls `/v1/chat/completions` using a server-only API key. This let us focus on the teaching, review and execution loop, and validate it with real inference during [live acceptance](docs/evidence/live-acceptance.json).
+
+**Nebius services used:** Token Factory managed model inference and its model catalog API. We did not use additional Nebius services, provision GPU instances, or configure infrastructure autoscaling.
+
 ## Local setup
 
 Use Node.js 22.12+ and npm. Dependencies are locked in `package-lock.json`.
@@ -39,6 +54,18 @@ Teach Mode locks the demonstration to its ticket. Cancel a teaching session befo
 
 Copy `.env.example` to the ignored `.env.local` (or `.env`) file. The server loads `.env.local` before `.env`; exported environment variables take precedence over both. Set server-only `NEBIUS_API_KEY`; never put credentials in a `VITE_` variable. Set `NEBIUS_BASE_URL` to your Nebius Token Factory regional endpoint if needed. Restart the server, select **Nemotron** in the top bar, and reset before demonstrating again.
 
+```sh
+cp .env.example .env.local
+```
+
+Edit `.env.local` to add your Nebius Token Factory API key before starting the server. Optional model settings for reproducing our acceptance configuration are shown below; use them only if these IDs are available in your account's model catalog:
+
+```dotenv
+NEBIUS_BASE_URL=https://api.tokenfactory.nebius.com/v1/
+NEBIUS_FAST_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
+NEBIUS_DEEP_MODEL=nvidia/Nemotron-3-Ultra-550b-a55b
+```
+
 `NEBIUS_FAST_MODEL` and `NEBIUS_DEEP_MODEL` can contain exact IDs exposed by your account's `/v1/models` catalog. If omitted, the client selects available Nemotron variants, preferring Nano for matching/replies and Ultra for induction/comparison. It rejects unavailable or non-Nemotron configured models. Model names are not assumed to be globally available.
 
 The implementation uses Nebius's OpenAI-compatible `/chat/completions` interface described in the [official Nemotron cookbook](https://github.com/nebius/token-factory-cookbook/tree/main/models/nemotron). Missing credentials, upstream errors, timeout, invalid JSON and unsafe workflow definitions produce visible errors; no workflow is activated from those failures.
@@ -65,4 +92,8 @@ For deploying from a different machine, follow [the deployment procedure](docs/D
 
 [Watch the live browser demo](public/demo/shadowops-demo.mp4) (2m33s, labeled cuts/2× speed, no audio).
 
-Licensed under [MIT](LICENSE). See [demo package](docs/DEMO.md) for architecture and presentation sequence.
+## License
+
+This project's source code is licensed under the [MIT License](LICENSE), an [OSI-approved open source license](https://opensource.org/license/mit). Hosted model access is subject to the provider's applicable terms.
+
+See [demo package](docs/DEMO.md) for architecture and presentation sequence.
